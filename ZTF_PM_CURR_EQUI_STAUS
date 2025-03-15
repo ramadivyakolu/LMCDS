@@ -1,0 +1,140 @@
+@EndUserText.label: 'Current Equipment Status'
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+define table function ZTF_PM_CURR_EQUI_STAUS
+returns
+{
+  client   : mandt;
+  equip    : equnr;
+  sys_stat : abap.char( 40 );
+  usr_stat : abap.char( 40 );
+}
+implemented by method
+  zcl_pm_equi_status=>get_status;
+
+
+
+CLASS zcl_pm_equi_status DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+***--------------------------------------------------------------------*
+*  Lockheed Martin Intellectual Property:                              *
+*    © 2024 Lockheed Martin Corporation                                *
+*----------------------------------------------------------------------*
+************************************************************************
+*  Class: ZCL_PM_EQUI_STATUS
+*  Technical Specification: ATR-00411-R                                *
+*  Inputs: N/A                                                         *
+*  Outputs: N/A                                                        *
+*  Security Profile / Authority Information:  N/A                      *
+*                                                                      *
+************************************************************************
+*  Changes History:                                                    *
+*----------------------------------------------------------------------*
+*  DATE         AUTHOR                      TRANSPORT #                *
+*----------------------------------------------------------------------*
+* 11/22/2024    Sarawana Vijayakumar N0128G  DS4K920043                *
+*----------------------------------------------------------------------*
+
+  PUBLIC SECTION.
+    INTERFACES if_amdp_marker_hdb.
+
+    CLASS-METHODS get_status
+        FOR TABLE FUNCTION ztf_pm_curr_equi_staus.
+
+  PROTECTED SECTION.
+
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+
+
+CLASS zcl_pm_equi_status IMPLEMENTATION.
+  METHOD get_status BY DATABASE FUNCTION FOR HDB
+                        LANGUAGE SQLSCRIPT
+                        OPTIONS READ-ONLY
+                           USING equi
+                                 jest
+                                 jsto
+                                 tj30t
+                                 tj02t.
+***--------------------------------------------------------------------*
+*  Lockheed Martin Intellectual Property:                              *
+*    © 2024 Lockheed Martin Corporation                                *
+*----------------------------------------------------------------------*
+************************************************************************
+*  Method: GET_STATUS                                                  *
+*  Technical Specification: ATR-00411-R                                *
+*  Inputs: N/A                                                         *
+*  Outputs: N/A                                                        *
+*  Security Profile / Authority Information:  N/A                      *
+*                                                                      *
+************************************************************************
+*  Changes History:                                                    *
+*----------------------------------------------------------------------*
+*  DATE         AUTHOR                      TRANSPORT #                *
+*----------------------------------------------------------------------*
+* 11/22/2024    Sarawana Vijayakumar N0128G  DS4K920043                *
+*----------------------------------------------------------------------*
+    declare l_client number ( 3 );
+    declare l_langu char (  2 );
+
+    l_client = session_context( 'CLIENT' );
+    l_langu =  session_context( 'LOCALE_SAP' );
+
+    lt_equi_status =
+         SELECT DISTINCT
+                l_client AS client,
+                equip.equnr as equip,
+
+                case substring(status.stat,1,1)
+                    WHEN 'E' then 'USR'
+                    ELSE 'SYS'
+                END AS statustype,
+
+                CASE substring(status.stat,1,1)
+                    WHEN 'E' THEN usrstat.txt04
+                    else ''
+                end as usrstat,
+
+                case substring(status.stat,1,1)
+                    WHEN 'I' then sysstat.txt04
+                    else ''
+                end as sysstat
+
+                from       equi  as equip
+                inner join jsto  as profile on equip.objnr = profile.objnr
+                inner join jest  as status  on status.objnr = equip.objnr
+                                           and status.inact <> 'X'
+                left outer join tj30t as usrstat on usrstat.stsma = profile.stsma
+                                                and usrstat.estat = status.stat
+                                                and usrstat.spras = l_langu
+                LEFT OUTER JOIN tj02t AS sysstat ON sysstat.istat = status.stat
+                                                and sysstat.spras = l_langu
+                   AND (sysstat.txt04 is not null or usrstat.txt04 is not null);
+
+lt_status_concat =
+      SELECT client,
+             equip AS equip,
+             case statustype when 'SYS'
+             THEN STRING_AGG ( sysstat, '  ' ORDER BY sysstat ) END AS sys_stat,
+             CASE statustype WHEN 'USR'
+             THEN STRING_AGG ( usrstat, '  ' ORDER BY usrstat ) END AS usr_stat
+        FROM :lt_equi_status
+       GROUP BY client,
+                equip,
+                statustype;
+
+ RETURN
+    select sys.client   as client,
+           sys.equip    as equip,
+           sys.sys_stat as sys_stat,
+           usr.usr_stat as usr_stat
+           from :lt_status_concat as sys
+           inner join :lt_status_concat as usr on sys.equip = usr.equip
+           where ( sys.sys_stat is not null
+             and   usr.usr_stat is not null );
+
+  ENDMETHOD.
+ENDCLASS.
