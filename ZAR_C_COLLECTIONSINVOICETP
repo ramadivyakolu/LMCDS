@@ -1,0 +1,250 @@
+@Metadata: { allowExtensions: true }
+@VDM: { usage: { type:     [ #TRANSACTIONAL_PROCESSING_SERVICE ] },
+                 viewType: #CONSUMPTION }
+@AccessControl: { personalData:           { blocking: #BLOCKED_DATA_EXCLUDED },
+                  authorizationCheck:     #CHECK }
+@ObjectModel: { usageType: { serviceQuality: #X,
+                             sizeCategory:   #L,
+                             dataClass:      #TRANSACTIONAL },
+                representativeKey: 'AccountingDocumentItem',
+                semanticKey: [ 'CollectionSegment',
+                               'Customer',
+//                               'BranchAccount',
+                               'PostingKey',
+                               'CompanyCode',
+                               'FiscalYear',
+                               'AccountingDocument',
+                               'AccountingDocumentItem',
+                              'DisputeCase',
+                               'PromiseToPay' ],
+               query: { implementedBy: 'ABAP:ZCL_COLL_PR_INV_QUERY' },
+                supportedCapabilities: [ #SITUATION_ANCHOR ] }
+@EndUserText: { label: 'Collections Invoice' }
+
+define root view entity ZAR_C_COLLECTIONSINVOICETP
+  provider contract transactional_query
+  as projection on ZAR_R_COLLECTIONSINVOICETP as CollectionsInvoice
+{
+
+          @ObjectModel: { text: { element: [ 'CollectionSegmentName' ] } } 
+  key     CollectionSegment,
+
+          @ObjectModel: { text: { element: [ 'CompanyCodeName' ] } }
+  key     CompanyCode,
+
+  key     FiscalYear,
+  key     AccountingDocument,
+  key     AccountingDocumentItem,
+
+          @ObjectModel: { text: { element: [ 'CustomerName' ] } }
+          Customer,
+
+//          @ObjectModel: { text: { element: [ 'BranchAccountName' ] } }
+//          BranchAccount,
+
+          DocumentDate,
+          PostingDate,
+          DunningLevel,
+          LastDunningDate,
+
+          @ObjectModel: { text: { element: [ 'OverdueDays' ] } }
+          NetDueDate,
+
+          Reference1InDocumentHeader,
+          Reference2InDocumentHeader,
+
+          @ObjectModel: { text: { element: [ 'PaymentMethodDescription' ] } }
+          PaymentMethod,
+
+          FinancialAccountType,
+
+          OverdueDays,
+          CashDiscount1Days,
+          AmountInTransactionCurrency,
+          PaidAmount,
+          DunnedAmount,
+          OpenAmountInDocumentCurrency,
+
+          CashDiscountAmtInTransacCrcy,
+          TransactionCurrency,
+          PaymentDate,
+
+          @ObjectModel: { text: { element: [ 'DunningBlockingReasonDesc' ] } }
+          DunningBlockingReason,
+
+          @ObjectModel: { text: { element: [ 'SpecialGLCodeLongName' ] } }
+          SpecialGLCode,
+
+          OperationalGLAccount,
+          FiscalPeriod,
+          BillingDocument,
+
+          @ObjectModel: { text: { element: [ 'PostingKeyName' ] } }
+          PostingKey,
+
+          DocumentItemText,
+          ReferenceDocumentLogicalSystem,
+
+          @ObjectModel: { text: { element: [ 'CaseStatusName' ] } }
+          CaseStatus,
+
+          CaseStatusName,
+
+          @ObjectModel: { text: { element: [ 'ReasonCodeName' ] } }
+          CaseReason,
+          ReasonCodeName,
+
+          @ObjectModel: { text: { element: [ 'PromiseToPayStatusName' ] } }
+          PromiseToPayStatus,
+
+          DisputeCase,
+          PromiseToPay,
+          NumberOfResubmissions,
+          ArrangedAmount,
+          PromisedAmount,
+          PromiseToPayLevel,
+          PromiseToPayDueDate,
+          DisputedAmount,
+          CreditedAmount,
+          DocumentReferenceID,
+          LastDunningDurationInDays,
+          ObjectKey,
+          Country,
+//          ResubmissionUUID,
+//          ResubmissionDueDate,
+//          ResubmissionReason,
+//          NumberOfDaysSinceResubmission,
+//          CaseUniqueID,
+          ZZ1_ACCEPTANCE_DT_PRA,
+          ZZ1_ACCT_DOC_NBR_PRA,
+          ZZ1_ACTION_STATUS_PRA,
+          ZZ1_CONTRACT_NBR_PRA,
+          ZZ1_COST_VOUCHER_NBR_PRA,
+          ZZ1_DELIVERY_ORDER_NBR_PRA,
+          ZZ1_FUND_STATUS_PRA,
+          @ObjectModel: { text: { element: [ 'ZZ1_Priority_desc_PRA' ] } }
+          ZZ1_Priority_code_PRA,
+          ZZ1_PROCESSED_DT_PRA,
+          ZZ1_REJECT_MESSAGES_PRA,
+          ZZ1_STATUS_HISTORY_PRA,
+          ZZ1_WAWF_DOC_TYPE_PRA,
+          ZZ1_WAWF_INVOICE_NBR_PRA,
+          ZZ1_WAWF_SHIPMENT_NBR_PRA,
+          ZZ1_Priority_desc_PRA,
+          ActionTaken,
+          PromisetoPayDate,
+          DeferredTillDate,
+          FundingValidationOverride,
+          @EndUserText.label: 'Days to Defer'
+          DaystoDefer,
+          
+          @ObjectModel: { text: { element: [ 'PaymentTermsText' ] } }
+          PaymentTerms,
+          ProfitCenter,
+          @ObjectModel: { text: { element: [ 'SegmentName' ] } }
+          Segment,
+          DocumentType,
+          OverPaymentReasonCode,
+          @ObjectModel: { text: { element: [ 'CollRespText' ] } }
+          CollectionResponsibility,
+          @ObjectModel: { text: { element: [ 'CollSplName' ] } }
+
+          _ARCollection.CollSpl as CollectionSpecialist,    
+           @ObjectModel: { text: { element: [ 'CollGroupName' ] } }
+          _ARCollection.CollGroup                                            as CollectionGroup,  
+          @ObjectModel: { text: { element: [ 'LatePaymentRiskName' ] } }
+          LatePaymentRisk,
+          CollectionsInvoice._CognitusJournalData.CallNumber as CallNumber,
+          CollectionsInvoice._CognitusJournalData.CustNumber as CustNumber,
+          CollectionsInvoice._CognitusJournalData.PrimeConNum as PrimeConNum,
+          
+
+          // Text elements
+          _PromiseToPayStatus._Text.PromiseToPayStatusName                                    as PromiseToPayStatusName    : localized,
+          _PostingKey._PostingKeyText.PostingKeyName                                          as PostingKeyName            : localized,
+          _SpecialGLCode._Text.SpecialGLCodeLongName                                          as SpecialGLCodeLongName     : localized,
+          _DunningBlockingReasonCode._Text.DunningBlockingReasonDesc                          as DunningBlockingReasonDesc : localized,
+          _CollectionSegment._Text.CollectionSegmentName                                      as CollectionSegmentName     : localized,
+          _CompanyCode.CompanyCodeName                                                        as CompanyCodeName,
+          _Customer.CustomerName                                                              as CustomerName,
+          _BranchAccount.CustomerName                                                         as BranchAccountName,
+          _PaymentMethod._Text.PaymentMethodDescription                                       as PaymentMethodDescription  : localized,
+          _CollsInvcPaytDelayPrediction._CollectionsLatePaymentRisk._Text.LatePaymentRiskName as LatePaymentRiskName       : localized,
+          _Text[1: Language=$session.system_language].CustomerPaymentTermsName as PaymentTermsText,
+          _ARCollection._User.FullName as CollSplName,
+          _JournalEntry.SegmentName as SegmentName,
+//          _PriorityVH.CollectionPriorityDescription as CollectionPriorityDescription,
+          _Attribute1Text[1: Language=$session.system_language].Attribute1Text as CollRespText,
+          _ARCollection._CollGroup._Text[1: Language=$session.system_language].CollectionGroupName      as CollGroupName,
+          
+
+          // Virtual Elements
+  virtual UICT_OverdueDays           : char1,
+  virtual Criticality                : char1,
+  virtual UICT_CollectionSegment     : boolean,
+  virtual UICT_BillingDocumentIcon   : boolean,
+  virtual SitnNumberOfInstances      : sit_de_inst_count,
+  virtual CollectionsInvoiceUniqueID : sit_de_def_ancobj,
+
+          // Exposed Associations
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _CollectionSegment,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _CompanyCode,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _Customer,
+
+//          @ObjectModel: { sort: { enabled: false },
+//                          filter: { enabled: false } }
+//          _BranchAccount,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _BillingDocument,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _DunningBlockingReasonCode,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _SpecialGLCode,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _PostingKey,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _PromiseToPayStatus,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _OperationalAcctgDocItem,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _CollectionsInvoiceNote       : redirected to C_CollectionsInvoiceNote,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _LinkedDisputeCase            : redirected to C_CollsInvoiceRelatedDsputCase,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _LinkedPromiseToPay           : redirected to C_CollsInvoiceRelatedPrms2P,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _LinkedResubmission           : redirected to C_CollsInvoiceRelatedResubmsn,
+
+          @ObjectModel: { sort: { enabled: false },
+                          filter: { enabled: false } }
+          _CollsInvcPaytDelayPrediction : redirected to C_CollsInvcPaytDelayPrediction
+
+}
