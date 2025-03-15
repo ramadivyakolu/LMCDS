@@ -1,0 +1,1436 @@
+@EndUserText.label: 'Table Function - External Reporting'
+@ClientDependent: true
+@AccessControl.authorizationCheck: #NOT_REQUIRED
+define table function ZTF_PM_EQUIP_CHANGES
+  with parameters
+    p_since : abap.dats
+returns
+{
+  CLIENT              : mandt;
+  equnr               : equnr;
+  EQUIPMENTOID        : equipment_oid;
+  objnr               : j_objnr; 
+  EQTYP               : eqtyp;
+  owner               : /cgdc/owner;
+  INVNR               : invnr;
+  ANLNR               : anln1;
+  ANLUN               : anln2;
+  GSBER               : gsber;
+  EQKTX               : ktx01;
+  curconno            : /cgdc/curconno;
+  ZZCURCONNAME        : zpm_curconname;
+  acqdate             : /cgdc/acqdate;
+  assacqcst           : /cgdc/assacqcst;
+  ca_cf               : /cgdc/ca_cf;
+  last_invdt          : /cgdc/last_invdt;
+  propertyclass       : /cgdc/propclass;
+  HERST               : herst;
+  MAPAR               : mapar;
+  SERGE               : serge;
+  TYPBZ               : typbz;
+  SWERK               : swerk;
+  ZZ_LM_LOC           : zcurloc1;
+  ZZ_CUR_OFF_LOC      : bu_partner;
+  ZZ_CUR_OFF_LOC_DESC : zcurblname;
+  adrnr               : ad_addrnum;
+  name1               : ad_name1;
+  NAME2               : ad_name2;
+  STREET              : ad_street;
+  CITY1               : ad_city1;
+  REGION              : regio;
+  POST_CODE1          : ad_pstcd1;
+  COUNTRY             : land1;
+  userstatus          : ilom_sttxu;
+  systemstatus        : ilom_sttxs;
+}
+implemented by method
+  ZCL_PM_EQUIP_CHANGES=>GET_DATA;
+
+
+
+CLASS zcl_pm_equip_changes DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    INTERFACES if_amdp_marker_hdb.
+
+    CLASS-METHODS get_data
+        FOR TABLE FUNCTION ztf_pm_equip_changes .
+    CLASS-METHODS get_data_acq_typ
+        FOR TABLE FUNCTION ztf_pm_equip_chan_acq_typ .
+    CLASS-METHODS get_data_cat
+        FOR TABLE FUNCTION ztf_pm_equip_chan_cat.
+    CLASS-METHODS get_data_prop_class
+        FOR TABLE FUNCTION ztf_pm_equip_chan_prop_class.
+
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+CLASS zcl_pm_equip_changes IMPLEMENTATION.
+  METHOD get_data_prop_class BY DATABASE FUNCTION FOR HDB
+                      LANGUAGE SQLSCRIPT
+                      OPTIONS READ-ONLY
+                         USING equi
+                               equz
+                               iloa
+                               cdpos
+                     zi_pm_cdgc_add_cds
+                               eqkt
+                               adrc
+                               cdhdr
+                               jest
+                              tj30
+                              jsto
+                              tj30t
+                              tj04
+                              tj02
+                              tj02t.
+*                              cdpos.
+
+    declare lv_count int;
+    declare lv_inx   bigint;
+    declare l_client number ( 3 ) ;
+
+    declare l_datum date ;
+    declare l_time time;
+    declare l_user  char ( 12 ) ;
+    declare l_srel  char ( 5 )  = 'I0002' ;   -- SYSTEM status rel
+    declare lv_equnr  char (  18 ) ;
+     declare lv_objnr  char (  22 ) ;
+    declare lv_invnr  char (  25 ) ;
+    declare lv_herst  char (  30 ) ;
+    declare lv_serge  char (  30 ) ;
+    declare lv_addnumber char ( 10 );
+
+     l_client = session_context( 'CLIENT' );
+
+
+    lt_euipadddetails = SELECT equnr,
+                               owner,
+                               curconno,
+                               acqdate,
+                               assacqcst,
+                               ca_cf,
+                               last_invdt,
+                               acq_docno,
+                               propertyclass
+                         FROM zi_pm_cdgc_add_cds
+                             WHERE mandt = l_client;
+
+    lt_euipdetails = SELECT equi.mandt as client,
+                            equi.equnr,
+                             equi.objnr,
+                            equi.eqtyp,
+                            addequip.owner,
+                            equi.invnr,
+                            loc.anlnr,
+                            loc.anlun,
+                            loc.gsber,
+                            _eqiptext.eqktx,
+                            addequip.curconno,
+                            equi.zzcurconname,
+                            addequip.acqdate,
+                            addequip.assacqcst,
+                            addequip.ca_cf,
+                            addequip.last_invdt,
+                            addequip.propertyclass,
+                            equi.herst,
+                            equz.mapar,
+                            equi.serge,
+                            equi.typbz,
+                            loc.swerk,
+                            equi.zz_lm_loc,
+                            equi.zz_cur_off_loc,
+                            equi.zz_cur_off_loc_desc,
+                            loc.adrnr,
+                            _adrc.name1,
+                            _adrc.name2,
+                            _adrc.street,
+                            _adrc.city1,
+                            _adrc.region,
+                            _adrc.post_code1,
+                            _adrc.country,
+                            cast( '' as varchar( 30 ) ) as userstatus,
+                            cast( '' as varchar( 30 ) ) as systemstatus
+                      from equi as equi
+           inner join equz               as equz on equi.equnr = equz.equnr
+                                                     and equz.datbi = '99991231'
+                                                     and equz.eqlfn      = '001'
+                                                     and equz.mandt = l_client
+           inner join iloa               as loc  ON equz.iloan = loc.iloan
+                                                 and loc.mandt = l_client
+           inner join zi_pm_cdgc_add_cds as addequip  ON equi.equnr = addequip.equnr
+                                                      and addequip.propertyclass = 'ST'
+                                                      and addequip.mandt = l_client
+           inner join eqkt    as _eqiptext ON equi.equnr = _eqiptext.equnr
+                                                      and _eqiptext.spras = 'E'
+                                                      and _eqiptext.mandt = l_client
+           inner join adrc    as _adrc ON      loc.adrnr = _adrc.addrnumber and
+                                            _adrc.client = l_client
+           where equi.mandt = l_client;
+
+    for lv_inx in 1..record_count( :lt_euipdetails )  DO
+
+     lv_equnr = :lt_euipdetails.equnr[ lv_inx ];
+     lv_objnr = :lt_euipdetails.objnr[ lv_inx ];
+
+     lt_jest_user =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   tj30.stonr,
+                   case
+                    when tj30.linep <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.linep end as position,
+                   case
+                    when tj30.statp <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.statp end as priority,
+                   txt04,
+                   txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr = jest.objnr
+         inner join tj30  on tj30.mandt = jest.mandt and
+                             tj30.stsma = jsto.stsma and
+                             tj30.estat = jest.stat
+         inner join tj30t on tj30t.mandt = tj30.mandt and
+                             tj30t.stsma = tj30.stsma and
+                             tj30t.estat = tj30.estat and
+                             tj30t.spras = session_context('LOCALE_SAP')
+     where jest.objnr = lv_objnr
+      and  jest.inact = ' '
+      and jest.stat between 'E0000' and 'E9999'
+      and jsto.mandt = session_context('CLIENT');
+
+    IF record_count( :lt_jest_user ) > 0 THEN
+        lt_euipdetails.userstatus[ lv_inx  ] = :lt_jest_user.txt04[ 1 ];
+    END if;
+
+     lt_jest_system =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   case
+                    when tj04.linep <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.linep end as position,
+                   case
+                    when tj04.statp <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.statp end as priority,
+                    txt04,
+                    txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr  = jest.objnr
+         left outer join tj04  on  tj04.obtyp  = jsto.obtyp and tj04.istat = jest.stat
+         inner join tj02  on tj02.istat  = jest.stat
+         inner join tj02t on tj02t.istat = jest.stat and tj02t.spras = session_context('LOCALE_SAP')
+     where jest.objnr = lv_objnr
+      and jest.inact = ' '
+       and jest.stat between 'I0000' and 'I9999'
+       and tj02.nodis = ' '
+       and jsto.mandt = session_context('CLIENT');
+
+     IF record_count( :lt_jest_system ) > 0 THEN
+        lt_euipdetails.systemstatus[ lv_inx  ] = :lt_jest_system.txt04[ 1 ];
+    END if;
+
+
+
+
+
+    lt_euiqallchange = SELECT fname, value_new, value_old,  udate, utime  FROM cdhdr AS a INNER JOIN  cdpos AS b  ON a.objectclas = b.objectclas
+                                                                          and a.objectid = b.objectid
+                                                                          and a.changenr   = b.changenr
+                                                                          and a.udate >    :p_since
+                                                                          and a.objectid  = :lv_equnr
+                                                                          where ( ( a.objectclas = 'EQUI' or
+                                                                                    a.objectclas = 'EQUZ' or
+                                                                                    a.objectclas = 'ILOA' or
+                                                                                    a.objectclas = 'EQKT' or
+                                                                                    a.objectclas = '/CGDC/EQUI_ADD' ) and  ( a.change_ind = 'U' ) )
+                                                                          ORDER BY udate desc;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/OWNER'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.owner[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'INVNR'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.invnr[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ANLNR'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.anlnr[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ANLUN'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.anlun[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'EQKTX'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.eqktx[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/CURCONNO'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.curconno[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZCURCONNAME'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zzcurconname[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/ACQDATE'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.acqdate[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/ASSACQCST'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.assacqcst[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/CA_CF'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.ca_cf[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/LAST_INVDT'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.last_invdt[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'HERST'
+                                                                          ORDER BY udate desc, utime asc ;
+
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.herst[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'MAPAR'
+                                                                          ORDER BY udate desc, utime asc ;
+
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.mapar[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'SERGE'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.serge[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+        lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'TYPBZ'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.typbz[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'SWERK'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.swerk[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_LM_LOC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_lm_loc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+        lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC_DESC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc_desc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC_DESC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc_desc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ADRNR'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+         lv_addnumber = :lt_euiqchange.value_old[ 1 ];
+         lt_address = SELECT addrnumber, name1, name2, street, city1,region,  post_code1, country FROM adrc WHERE addrnumber = :lv_addnumber;
+         lt_euipdetails.name1[ lv_inx  ] = :lt_address.name1[  1 ];
+         lt_euipdetails.name2[ lv_inx  ] = :lt_address.name2[ 1 ];
+         lt_euipdetails.street[ lv_inx  ] = :lt_address.street[ 1 ];
+         lt_euipdetails.city1[ lv_inx  ] = :lt_address.city1[ 1 ];
+         lt_euipdetails.region[ lv_inx  ] = :lt_address.region[ 1 ];
+         lt_euipdetails.post_code1[ lv_inx  ] = :lt_address.post_code1[ 1 ];
+         lt_euipdetails.country[ lv_inx  ] = :lt_address.country[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ESTAT'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.userstatus[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+   lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ISTAT'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.systemstatus[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    END for;
+
+   RETURN :lt_euipdetails;
+
+  ENDMETHOD.
+  METHOD get_data_cat BY DATABASE FUNCTION FOR HDB
+                      LANGUAGE SQLSCRIPT
+                      OPTIONS READ-ONLY
+                         USING equi
+                               equz
+                               iloa
+                               cdpos
+                     zi_pm_cdgc_add_cds
+                               eqkt
+                               adrc
+                               cdhdr
+                               jest
+                              tj30
+                              jsto
+                              tj30t
+                              tj04
+                              tj02
+                              tj02t.
+*                              cdpos.
+
+    declare lv_count int;
+    declare lv_inx   bigint;
+    declare l_client number ( 3 ) ;
+
+    declare l_datum date ;
+    declare l_time time;
+    declare l_user  char ( 12 ) ;
+    declare l_srel  char ( 5 )  = 'I0002' ;   -- SYSTEM status rel
+    declare lv_equnr  char (  18 ) ;
+     declare lv_objnr  char (  22 ) ;
+    declare lv_invnr  char (  25 ) ;
+    declare lv_herst  char (  30 ) ;
+    declare lv_serge  char (  30 ) ;
+    declare lv_addnumber char ( 10 );
+
+     l_client = session_context( 'CLIENT' );
+
+
+    lt_euipadddetails = SELECT equnr,
+                               owner,
+                               curconno,
+                               acqdate,
+                               assacqcst,
+                               ca_cf,
+                               last_invdt,
+                               acq_docno,
+                               propertyclass
+                         FROM zi_pm_cdgc_add_cds
+                             WHERE mandt = l_client;
+
+    lt_euipdetails = SELECT equi.mandt as client,
+                            equi.equnr,
+                            equi.objnr,
+                            equi.eqtyp,
+                            addequip.owner,
+                            equi.invnr,
+                            loc.anlnr,
+                            loc.anlun,
+                            loc.gsber,
+                            _eqiptext.eqktx,
+                            addequip.curconno,
+                            equi.zzcurconname,
+                            addequip.acqdate,
+                            addequip.assacqcst,
+                            addequip.ca_cf,
+                            addequip.last_invdt,
+                            addequip.propertyclass,
+                            equi.herst,
+                            equz.mapar,
+                            equi.serge,
+                            equi.typbz,
+                            loc.swerk,
+                            equi.zz_lm_loc,
+                            equi.zz_cur_off_loc,
+                            equi.zz_cur_off_loc_desc,
+                            loc.adrnr,
+                            _adrc.name1,
+                            _adrc.name2,
+                            _adrc.street,
+                            _adrc.city1,
+                            _adrc.region,
+                            _adrc.post_code1,
+                            _adrc.country,
+                            cast( '' as varchar( 30 ) ) as userstatus,
+                            cast( '' as varchar( 30 ) ) as systemstatus
+                      from equi as equi
+           inner join equz               as equz on equi.equnr = equz.equnr
+                                                     and equz.datbi = '99991231'
+                                                     and equz.eqlfn      = '001'
+
+                                                     and equz.mandt = l_client
+           inner join iloa               as loc  ON equz.iloan = loc.iloan
+                                                 and loc.mandt = l_client
+           inner join zi_pm_cdgc_add_cds as addequip  ON equi.equnr = addequip.equnr
+                                                      and addequip.mandt = l_client
+           inner join eqkt    as _eqiptext ON equi.equnr = _eqiptext.equnr
+                                                      and _eqiptext.spras = 'E'
+                                                      and _eqiptext.mandt = l_client
+           inner join adrc    as _adrc ON      loc.adrnr = _adrc.addrnumber and
+                                            _adrc.client = l_client
+           where ( equi.eqtyp =   'O' or
+                   equi.eqtyp =   'R' )
+              and equi.mandt = l_client;
+
+    for lv_inx in 1..record_count( :lt_euipdetails )  DO
+
+     lv_equnr = :lt_euipdetails.equnr[ lv_inx ];
+     lv_objnr = :lt_euipdetails.objnr[ lv_inx ];
+
+     lt_jest_user =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   tj30.stonr,
+                   case
+                    when tj30.linep <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.linep end as position,
+                   case
+                    when tj30.statp <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.statp end as priority,
+                   txt04,
+                   txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr = jest.objnr
+         inner join tj30  on tj30.mandt = jest.mandt and
+                             tj30.stsma = jsto.stsma and
+                             tj30.estat = jest.stat
+         inner join tj30t on tj30t.mandt = tj30.mandt and
+                             tj30t.stsma = tj30.stsma and
+                             tj30t.estat = tj30.estat and
+                             tj30t.spras = session_context('LOCALE_SAP')
+     where jest.objnr = lv_objnr
+      and  jest.inact = ' '
+      and jest.stat between 'E0000' and 'E9999'
+      and jsto.mandt = session_context('CLIENT');
+
+    IF record_count( :lt_jest_user ) > 0 THEN
+        lt_euipdetails.userstatus[ lv_inx  ] = :lt_jest_user.txt04[ 1 ];
+    END if;
+
+     lt_jest_system =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   case
+                    when tj04.linep <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.linep end as position,
+                   case
+                    when tj04.statp <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.statp end as priority,
+                    txt04,
+                    txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr  = jest.objnr
+         left outer join tj04  on  tj04.obtyp  = jsto.obtyp and tj04.istat = jest.stat
+         inner join tj02  on tj02.istat  = jest.stat
+         inner join tj02t on tj02t.istat = jest.stat and tj02t.spras = session_context('LOCALE_SAP')
+     where jest.objnr = lv_objnr
+      and jest.inact = ' '
+       and jest.stat between 'I0000' and 'I9999'
+       and tj02.nodis = ' '
+       and jsto.mandt = session_context('CLIENT');
+
+     IF record_count( :lt_jest_system ) > 0 THEN
+        lt_euipdetails.systemstatus[ lv_inx  ] = :lt_jest_system.txt04[ 1 ];
+    END if;
+
+
+
+
+    lt_euiqallchange = SELECT fname, value_new, value_old,  udate, utime  FROM cdhdr AS a INNER JOIN  cdpos AS b  ON a.objectclas = b.objectclas
+                                                                          and a.objectid = b.objectid
+                                                                          and a.changenr   = b.changenr
+                                                                          and a.udate >    :p_since
+                                                                          and a.objectid  = :lv_equnr
+                                                                          where ( ( a.objectclas = 'EQUI' or
+                                                                                    a.objectclas = 'EQUZ' or
+                                                                                    a.objectclas = 'ILOA' or
+                                                                                    a.objectclas = 'EQKT' or
+                                                                                    a.objectclas = '/CGDC/EQUI_ADD' ) and  ( a.change_ind = 'U' ) )
+                                                                          ORDER BY udate desc;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/OWNER'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.owner[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'INVNR'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.invnr[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ANLNR'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.anlnr[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ANLUN'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.anlun[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'EQKTX'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.eqktx[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/CURCONNO'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.curconno[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZCURCONNAME'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zzcurconname[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/ACQDATE'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.acqdate[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/ASSACQCST'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.assacqcst[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/CA_CF'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.ca_cf[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/LAST_INVDT'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.last_invdt[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'HERST'
+                                                                          ORDER BY udate desc, utime asc ;
+
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.herst[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'MAPAR'
+                                                                          ORDER BY udate desc, utime asc ;
+
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.mapar[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'SERGE'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.serge[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+        lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'TYPBZ'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.typbz[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'SWERK'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.swerk[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_LM_LOC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_lm_loc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+        lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC_DESC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc_desc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC_DESC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc_desc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ADRNR'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+         lv_addnumber = :lt_euiqchange.value_old[ 1 ];
+         lt_address = SELECT addrnumber, name1, name2, street, city1,region,  post_code1, country FROM adrc WHERE addrnumber = :lv_addnumber;
+         lt_euipdetails.name1[ lv_inx  ] = :lt_address.name1[  1 ];
+         lt_euipdetails.name2[ lv_inx  ] = :lt_address.name2[ 1 ];
+         lt_euipdetails.street[ lv_inx  ] = :lt_address.street[ 1 ];
+         lt_euipdetails.city1[ lv_inx  ] = :lt_address.city1[ 1 ];
+         lt_euipdetails.region[ lv_inx  ] = :lt_address.region[ 1 ];
+         lt_euipdetails.post_code1[ lv_inx  ] = :lt_address.post_code1[ 1 ];
+         lt_euipdetails.country[ lv_inx  ] = :lt_address.country[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ESTAT'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.userstatus[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+   lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ISTAT'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.systemstatus[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    END for;
+
+   RETURN :lt_euipdetails;
+
+  ENDMETHOD.
+  METHOD get_data_acq_typ BY DATABASE FUNCTION FOR HDB
+                     LANGUAGE SQLSCRIPT
+                     OPTIONS READ-ONLY
+                        USING equi
+                              equz
+                              iloa
+                              cdpos
+                    zi_pm_cdgc_add_cds
+                              eqkt
+                              adrc
+                              cdhdr
+                              jest
+                              tj30
+                              jsto
+                              tj30t
+                              tj04
+                              tj02
+                              tj02t.
+*                              cdpos.
+
+    declare lv_count int;
+    declare lv_inx   bigint;
+    declare l_client number ( 3 ) ;
+
+    declare l_datum date ;
+    declare l_time time;
+    declare l_user  char ( 12 ) ;
+    declare l_srel  char ( 5 )  = 'I0002' ;   -- SYSTEM status rel
+    declare lv_equnr  char (  18 ) ;
+    declare lv_objnr  char (  22 ) ;
+    declare lv_invnr  char (  25 ) ;
+    declare lv_herst  char (  30 ) ;
+    declare lv_serge  char (  30 ) ;
+    declare lv_addnumber char ( 10 );
+
+     l_client = session_context( 'CLIENT' );
+
+
+    lt_euipadddetails = SELECT equnr,
+                               owner,
+                               curconno,
+                               acqdate,
+                               assacqcst,
+                               ca_cf,
+                               last_invdt,
+                               acq_docno,
+                               propertyclass
+                         FROM zi_pm_cdgc_add_cds
+                             WHERE mandt = l_client;
+
+    lt_euipdetails = SELECT equi.mandt as client,
+                            equi.equnr,
+                            equi.objnr,
+                            equi.eqtyp,
+                            addequip.owner,
+                            equi.invnr,
+                            loc.anlnr,
+                            loc.anlun,
+                            loc.gsber,
+                            _eqiptext.eqktx,
+                            addequip.curconno,
+                            equi.zzcurconname,
+                            addequip.acqdate,
+                            addequip.assacqcst,
+                            addequip.ca_cf,
+                            addequip.last_invdt,
+                            addequip.propertyclass,
+                            equi.herst,
+                            equz.mapar,
+                            equi.serge,
+                            equi.typbz,
+                            loc.swerk,
+                            equi.zz_lm_loc,
+                            equi.zz_cur_off_loc,
+                            equi.zz_cur_off_loc_desc,
+                            loc.adrnr,
+                            _adrc.name1,
+                            _adrc.name2,
+                            _adrc.street,
+                            _adrc.city1,
+                            _adrc.region,
+                            _adrc.post_code1,
+                            _adrc.country,
+                            cast( '' as varchar( 30 ) ) as userstatus,
+                            cast( '' as varchar( 30 ) ) as systemstatus
+                      from equi as equi
+           inner join equz               as equz on equi.equnr = equz.equnr
+                                                     and equz.datbi = '99991231'
+                                                     and equz.eqlfn      = '001'
+                                                     and equz.mandt = l_client
+           inner join iloa               as loc  ON equz.iloan = loc.iloan
+                                                 and loc.mandt = l_client
+           inner join zi_pm_cdgc_add_cds as addequip  ON equi.equnr = addequip.equnr
+                                                      and addequip.ca_cf = 'CP'
+                                                      and addequip.mandt = l_client
+           inner join eqkt    as _eqiptext ON equi.equnr = _eqiptext.equnr
+                                                      and _eqiptext.spras = 'E'
+                                                      and _eqiptext.mandt = l_client
+           inner join adrc    as _adrc ON      loc.adrnr = _adrc.addrnumber and
+                                            _adrc.client = l_client
+           where equi.mandt = l_client;
+
+    for lv_inx in 1..record_count( :lt_euipdetails )  DO
+
+     lv_equnr = :lt_euipdetails.equnr[ lv_inx ];
+     lv_objnr = :lt_euipdetails.objnr[ lv_inx ];
+
+        lt_jest_user =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   tj30.stonr,
+                   case
+                    when tj30.linep <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.linep end as position,
+                   case
+                    when tj30.statp <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.statp end as priority,
+                   txt04,
+                   txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr = jest.objnr
+         inner join tj30  on tj30.mandt = jest.mandt and
+                             tj30.stsma = jsto.stsma and
+                             tj30.estat = jest.stat
+         inner join tj30t on tj30t.mandt = tj30.mandt and
+                             tj30t.stsma = tj30.stsma and
+                             tj30t.estat = tj30.estat and
+                             tj30t.spras = session_context('LOCALE_SAP')
+     where jest.objnr = lv_objnr
+      and  jest.inact = ' '
+      and jest.stat between 'E0000' and 'E9999'
+      and jsto.mandt = session_context('CLIENT');
+
+    IF record_count( :lt_jest_user ) > 0 THEN
+        lt_euipdetails.userstatus[ lv_inx  ] = :lt_jest_user.txt04[ 1 ];
+    END if;
+
+     lt_jest_system =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   case
+                    when tj04.linep <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.linep end as position,
+                   case
+                    when tj04.statp <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.statp end as priority,
+                    txt04,
+                    txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr  = jest.objnr
+         left outer join tj04  on  tj04.obtyp  = jsto.obtyp and tj04.istat = jest.stat
+         inner join tj02  on tj02.istat  = jest.stat
+         inner join tj02t on tj02t.istat = jest.stat and tj02t.spras = session_context('LOCALE_SAP')
+     where jest.objnr = lv_objnr
+      and jest.inact = ' '
+       and jest.stat between 'I0000' and 'I9999'
+       and tj02.nodis = ' '
+       and jsto.mandt = session_context('CLIENT');
+
+     IF record_count( :lt_jest_system ) > 0 THEN
+        lt_euipdetails.systemstatus[ lv_inx  ] = :lt_jest_system.txt04[ 1 ];
+    END if;
+
+
+
+    lt_euiqallchange = SELECT fname, value_new, value_old,  udate, utime  FROM cdhdr AS a INNER JOIN  cdpos AS b  ON a.objectclas = b.objectclas
+                                                                          and a.objectid = b.objectid
+                                                                          and a.changenr   = b.changenr
+                                                                          and a.udate >    :p_since
+                                                                          and a.objectid  = :lv_equnr
+                                                                          where ( ( a.objectclas = 'EQUI' or
+                                                                                    a.objectclas = 'EQUZ' or
+                                                                                    a.objectclas = 'ILOA' or
+                                                                                    a.objectclas = 'EQKT' or
+                                                                                    a.objectclas = '/CGDC/EQUI_ADD' ) and  ( a.change_ind = 'U' ) )
+                                                                          ORDER BY udate desc;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/OWNER'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.owner[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'INVNR'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.invnr[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ANLNR'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.anlnr[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ANLUN'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.anlun[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'EQKTX'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.eqktx[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/CURCONNO'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.curconno[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZCURCONNAME'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zzcurconname[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/ACQDATE'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.acqdate[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/ASSACQCST'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.assacqcst[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/CA_CF'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.ca_cf[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/LAST_INVDT'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.last_invdt[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'HERST'
+                                                                          ORDER BY udate desc, utime asc ;
+
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.herst[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'MAPAR'
+                                                                          ORDER BY udate desc, utime asc ;
+
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.mapar[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'SERGE'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.serge[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+        lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'TYPBZ'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.typbz[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'SWERK'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.swerk[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_LM_LOC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_lm_loc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+        lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC_DESC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc_desc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC_DESC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc_desc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ADRNR'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+         lv_addnumber = :lt_euiqchange.value_old[ 1 ];
+         lt_address = SELECT addrnumber, name1, name2, street, city1,region,  post_code1, country FROM adrc WHERE addrnumber = :lv_addnumber;
+         lt_euipdetails.name1[ lv_inx  ] = :lt_address.name1[  1 ];
+         lt_euipdetails.name2[ lv_inx  ] = :lt_address.name2[ 1 ];
+         lt_euipdetails.street[ lv_inx  ] = :lt_address.street[ 1 ];
+         lt_euipdetails.city1[ lv_inx  ] = :lt_address.city1[ 1 ];
+         lt_euipdetails.region[ lv_inx  ] = :lt_address.region[ 1 ];
+         lt_euipdetails.post_code1[ lv_inx  ] = :lt_address.post_code1[ 1 ];
+         lt_euipdetails.country[ lv_inx  ] = :lt_address.country[ 1 ];
+    END if;
+
+   lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ESTAT'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.userstatus[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+   lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ISTAT'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.systemstatus[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+    END for;
+
+   RETURN :lt_euipdetails;
+
+  ENDMETHOD.
+
+  METHOD get_data BY DATABASE FUNCTION FOR HDB
+                     LANGUAGE SQLSCRIPT
+                     OPTIONS READ-ONLY
+                        USING equi
+                              equz
+                              iloa
+                              cdpos
+                    zi_pm_cdgc_add_cds
+                              eqkt
+                              adrc
+                              cdhdr
+                              jest
+                              tj30
+                              jsto
+                              tj30t
+                              tj04
+                              tj02
+                              tj02t.
+*                              cdpos.
+
+    declare lv_count int;
+    declare lv_inx   bigint;
+    declare l_client number ( 3 ) ;
+
+    declare l_datum date ;
+    declare l_time time;
+    declare l_user  char ( 12 ) ;
+    declare l_srel  char ( 5 )  = 'I0002' ;   -- SYSTEM status rel
+    declare lv_equnr  char (  18 ) ;
+    declare lv_objnr  char (  22 ) ;
+    declare lv_invnr  char (  25 ) ;
+    declare lv_herst  char (  30 ) ;
+    declare lv_serge  char (  30 ) ;
+    declare lv_addnumber char ( 10 );
+
+
+     l_client = session_context( 'CLIENT' );
+
+
+
+
+    lt_euipadddetails = SELECT equnr,
+                               owner,
+                               curconno,
+                               acqdate,
+                               assacqcst,
+                               ca_cf,
+                               last_invdt,
+                               acq_docno,
+                               propertyclass
+                         FROM zi_pm_cdgc_add_cds
+                             WHERE mandt = l_client;
+
+    lt_euipdetails = SELECT equi.mandt as client,
+                            equi.equnr,
+                            equi.equipmentoid,
+                            equi.objnr,
+                            equi.eqtyp,
+                            addequip.owner,
+                            equi.invnr,
+                            loc.anlnr,
+                            loc.anlun,
+                            loc.gsber,
+                            _eqiptext.eqktx,
+                            addequip.curconno,
+                            equi.zzcurconname,
+                            addequip.acqdate,
+                            addequip.assacqcst,
+                            addequip.ca_cf,
+                            addequip.last_invdt,
+                            addequip.propertyclass,
+                            equi.herst,
+                            equz.mapar,
+                            equi.serge,
+                            equi.typbz,
+                            loc.swerk,
+                            equi.zz_lm_loc,
+                            equi.zz_cur_off_loc,
+                            equi.zz_cur_off_loc_desc,
+                            loc.adrnr,
+                            _adrc.name1,
+                            _adrc.name2,
+                            _adrc.street,
+                            _adrc.city1,
+                            _adrc.region,
+                            _adrc.post_code1,
+                            _adrc.country,
+                            cast( '' as varchar( 30 ) ) as userstatus,
+                            cast( '' as varchar( 30 ) ) as systemstatus
+                      from equi as equi
+           inner join equz               as equz on equi.equnr = equz.equnr
+                                                     and equz.datbi = '99991231'
+                                                     and equz.eqlfn      = '001'
+                                                     and equz.mandt = l_client
+           inner join iloa               as loc  ON equz.iloan = loc.iloan
+                                                 and loc.mandt = l_client
+           inner join zi_pm_cdgc_add_cds as addequip  ON equi.equnr = addequip.equnr
+                                                      and addequip.owner = 'G'
+                                                      and addequip.mandt = l_client
+           inner join eqkt    as _eqiptext ON equi.equnr = _eqiptext.equnr
+                                                      and _eqiptext.spras = 'E'
+                                                      and _eqiptext.mandt = l_client
+           inner join adrc    as _adrc ON      loc.adrnr = _adrc.addrnumber and
+                                            _adrc.client = l_client
+           where equi.mandt = l_client;
+
+    for lv_inx in 1..record_count( :lt_euipdetails )  DO
+
+     lv_equnr = :lt_euipdetails.equnr[ lv_inx ];
+     lv_objnr = :lt_euipdetails.objnr[ lv_inx ];
+
+    lt_jest_user =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   tj30.stonr,
+                   case
+                    when tj30.linep <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.linep end as position,
+                   case
+                    when tj30.statp <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.statp end as priority,
+                   txt04,
+                   txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr = jest.objnr
+         inner join tj30  on tj30.mandt = jest.mandt and
+                             tj30.stsma = jsto.stsma and
+                             tj30.estat = jest.stat
+         inner join tj30t on tj30t.mandt = tj30.mandt and
+                             tj30t.stsma = tj30.stsma and
+                             tj30t.estat = tj30.estat and
+                             tj30t.spras = session_context('LOCALE_SAP')
+     where jest.objnr = lv_objnr
+      and  jest.inact = ' '
+      and jest.stat between 'E0000' and 'E9999'
+      and jsto.mandt = session_context('CLIENT');
+
+    IF record_count( :lt_jest_user ) > 0 THEN
+        lt_euipdetails.userstatus[ lv_inx  ] = :lt_jest_user.txt04[ 1 ];
+    END if;
+
+     lt_jest_system =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   case
+                    when tj04.linep <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.linep end as position,
+                   case
+                    when tj04.statp <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.statp end as priority,
+                    txt04,
+                    txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr  = jest.objnr
+         left outer join tj04  on  tj04.obtyp  = jsto.obtyp and tj04.istat = jest.stat
+         inner join tj02  on tj02.istat  = jest.stat
+         inner join tj02t on tj02t.istat = jest.stat and tj02t.spras = session_context('LOCALE_SAP')
+     where jest.objnr = lv_objnr
+      and jest.inact = ' '
+       and jest.stat between 'I0000' and 'I9999'
+       and tj02.nodis = ' '
+       and jsto.mandt = session_context('CLIENT');
+
+     IF record_count( :lt_jest_system ) > 0 THEN
+        lt_euipdetails.systemstatus[ lv_inx  ] = :lt_jest_system.txt04[ 1 ];
+    END if;
+
+    lt_euiqallchange = SELECT fname, value_new, value_old,  udate, utime  FROM cdhdr AS a INNER JOIN  cdpos AS b  ON a.objectclas = b.objectclas
+                                                                          and a.objectid = b.objectid
+                                                                          and a.changenr   = b.changenr
+                                                                          and a.udate >    :p_since
+                                                                          and a.objectid  = :lv_equnr
+                                                                          where ( ( a.objectclas = 'EQUI' or
+                                                                                    a.objectclas = 'EQUZ' or
+                                                                                    a.objectclas = 'ILOA' or
+                                                                                    a.objectclas = 'EQKT' or
+                                                                                    a.objectclas = 'TJ02' or
+                                                                                    a.objectclas = 'TJ30' or
+                                                                                    a.objectclas = '/CGDC/EQUI_ADD' ) and  ( a.change_ind = 'U' ) )
+                                                                          ORDER BY udate desc;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/OWNER'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.owner[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'INVNR'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.invnr[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ANLNR'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.anlnr[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ANLUN'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.anlun[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'EQKTX'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.eqktx[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/CURCONNO'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.curconno[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZCURCONNAME'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zzcurconname[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/ACQDATE'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.acqdate[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/ASSACQCST'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.assacqcst[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/CA_CF'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.ca_cf[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = '/CGDC/LAST_INVDT'
+                                                                          ORDER BY udate asc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.last_invdt[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'HERST'
+                                                                          ORDER BY udate desc, utime asc ;
+
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.herst[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old, udate, utime FROM :lt_euiqallchange WHERE fname   = 'MAPAR'
+                                                                          ORDER BY udate desc, utime asc ;
+
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.mapar[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'SERGE'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.serge[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+        lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'TYPBZ'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.typbz[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'SWERK'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.swerk[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_LM_LOC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_lm_loc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+        lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC_DESC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc_desc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ZZ_CUR_OFF_LOC_DESC'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.zz_cur_off_loc_desc[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ADRNR'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+         lv_addnumber = :lt_euiqchange.value_old[ 1 ];
+         lt_address = SELECT addrnumber, name1, name2, street, city1,region,  post_code1, country FROM adrc WHERE addrnumber = :lv_addnumber;
+         lt_euipdetails.name1[ lv_inx  ] = :lt_address.name1[  1 ];
+         lt_euipdetails.name2[ lv_inx  ] = :lt_address.name2[ 1 ];
+         lt_euipdetails.street[ lv_inx  ] = :lt_address.street[ 1 ];
+         lt_euipdetails.city1[ lv_inx  ] = :lt_address.city1[ 1 ];
+         lt_euipdetails.region[ lv_inx  ] = :lt_address.region[ 1 ];
+         lt_euipdetails.post_code1[ lv_inx  ] = :lt_address.post_code1[ 1 ];
+         lt_euipdetails.country[ lv_inx  ] = :lt_address.country[ 1 ];
+    END if;
+
+    lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ESTAT'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.userstatus[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+   lt_euiqchange = SELECT value_new, value_old,  udate, utime FROM :lt_euiqallchange WHERE fname   = 'ISTAT'
+                                                                          ORDER BY udate desc,  utime asc;
+    if record_count( :lt_euiqchange ) > 0 THEN
+        lt_euipdetails.systemstatus[ lv_inx  ] = :lt_euiqchange.value_old[ 1 ];
+    END if;
+
+    END for;
+
+   RETURN :lt_euipdetails;
+
+  ENDMETHOD.
+ENDCLASS.
