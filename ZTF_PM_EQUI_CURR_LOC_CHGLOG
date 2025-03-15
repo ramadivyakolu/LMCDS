@@ -1,0 +1,413 @@
+@EndUserText.label: 'Table Function for Location Change Log'
+define table function ZTF_PM_EQUI_CURR_LOC_CHGLOG
+  //with parameters p_startdate :  abap.dats,
+  //                p_enddate   :  abap.dats
+returns
+{
+  CLIENT         : mandt;
+  Equipment      : equnr;
+  zz_tl_tech_id  : ztl_tltechid;
+  eqktx          : ktx01;
+  changenr       : cdchangenr;
+  udate          : abap.dats;
+  utime          : abap.tims;
+  zz_lm_loc      : zcurloc1;
+  zz_cur_off_loc : bu_partner;
+  zzsubconpo     : zpm_subconpo;
+  zzpoitemnum    : zpm_poitemnum;
+  zz_cur_floor   : zcurflr;
+  zz_cur_col     : zcurcol;
+  zz_cur_lgnum   : zpm_curlgnum;
+  zz_cur_area    : zcurarea;
+  zz_cur_row     : zcurrow;
+  zz_cur_bin     : zcurbin;
+  zz_cur_cube    : zcurcube;
+  zz_cur_rack    : zcurrack;
+  zz_cur_cab     : zcurcab;
+  zz_cur_tsk_ctr : zcurtskctr;
+  zz_cur_grid    : zcurgrid;
+  zz_chkin_date  : zchkindat;
+  zz_chkout_date : zchkoutdat;
+  zz_chk_code    : zcheck_cd;
+  zz_chkout_loc  : zchkoutloc;
+  zz_user_id     : zusrid;
+  zz_user_name   : zname_list;
+  zz_user_shift  : zusrshift;
+}
+implemented by method
+  ZCL_PM_EQUI_CURR_LOC_CHGLOG=>get_data;
+
+
+CLASS zcl_pm_equi_curr_loc_chglog DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+    INTERFACES if_amdp_marker_hdb.
+
+    CLASS-METHODS get_data
+        FOR TABLE FUNCTION ztf_pm_equi_curr_loc_chglog.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS zcl_pm_equi_curr_loc_chglog IMPLEMENTATION.
+  METHOD get_data BY DATABASE FUNCTION FOR HDB
+                        LANGUAGE SQLSCRIPT
+                        OPTIONS READ-ONLY
+                           USING  equi
+                                  eqkt
+                                  cdhdr
+                                 cdpos.
+
+    declare lv_inx   bigint;
+    declare lv_inx1  bigint;
+    declare lv_equipment char (  18 ) ;
+    declare lv_equipment_prev char (  18 ) ;
+    declare  lv_changenr char (  10 ) ;
+
+     declare it_final table (
+        client    nvarchar ( 3 ),
+
+        equipment nvarchar( 90 ),
+
+        zz_tl_tech_id char( 50 ),
+        eqktx  char( 40 ),
+
+        changenr  nvarchar( 10 ),
+
+        udate     char( 8 ),
+        utime     char( 8 ),
+
+        zz_lm_loc   char( 4 ),
+        zz_cur_off_loc   char( 10 ),
+        zzsubconpo   char( 10 ),
+        zzpoitemnum   char( 5 ),
+        zz_cur_floor   char( 4 ),
+        zz_cur_col   char( 8 ),
+        zz_cur_lgnum   char( 3 ),
+        zz_cur_area   char( 40 ),
+        zz_cur_row   char( 40 ),
+        zz_cur_bin   char( 40 ),
+        zz_cur_cube   char( 20 ),
+        zz_cur_rack   char( 20 ),
+        zz_cur_cab   char( 20 ),
+        zz_cur_tsk_ctr   char( 8 ),
+        zz_cur_grid   char( 8 ),
+        zz_chkin_date   char( 8 ),
+        zz_chkout_date   char( 8 ),
+        zz_chk_code   char( 6 ),
+        zz_chkout_loc   char( 80 ),
+        zz_user_id   char( 12 ),
+        zz_user_name   char( 80 ),
+        zz_user_shift   char( 10 )
+     );
+*
+   declare it_euipchange table (
+    client  char( 3 ),
+    equipment char( 18 ),
+    changenr  char( 10 ),
+    fname     char( 40 ),
+    value_new  char( 256 ),
+    value_old  char( 256 ),
+    udate      char( 10 ),
+    utime      char( 10 )
+   );
+
+   lt_euip_details =
+    SELECT  equi.mandt as client,
+            equi.equnr as equipment,
+
+            zz_tl_tech_id,
+            eqkt.eqktx,
+
+            '' as changenr,
+            current_date as udate,
+            current_time as utime,
+
+            zz_lm_loc,
+            zz_cur_off_loc,
+            zzsubconpo,
+            zzpoitemnum,
+            zz_cur_floor,
+            zz_cur_col,
+            zz_cur_lgnum,
+            zz_cur_area,
+            zz_cur_row,
+            zz_cur_bin,
+            zz_cur_cube,
+            zz_cur_rack,
+            zz_cur_cab,
+            zz_cur_tsk_ctr,
+            zz_cur_grid,
+            zz_chkin_date,
+            zz_chkout_date,
+            zz_chk_code,
+            zz_chkout_loc,
+            zz_user_id,
+            zz_user_name,
+            zz_user_shift
+            from equi as equi
+            inner join eqkt as eqkt
+            on    equi.equnr = eqkt.equnr
+            and   eqkt.spras   = session_context(  'LOCALE_SAP' )
+            WHERE equi.mandt = session_context( 'CLIENT' )
+            and   eqkt.mandt = session_context( 'CLIENT' )
+            ORDER BY equipment;
+
+    lt_euip_change_log = SELECT a.mandant as client, a.objectid as equipment, a.changenr, fname, value_new, value_old,  udate, utime
+                        from        cdhdr as a
+                        inner join  cdpos as b   on  a.objectclas = b.objectclas
+                                                 and a.objectid = b.objectid
+                                                 and a.changenr   = b.changenr
+                                                 where ( a.mandant = session_context( 'CLIENT' )
+                                                   and    ( a.objectclas = 'EQUI' or
+                                                           a.objectclas = 'EQUZ' or
+                                                           a.objectclas = 'ILOA' or
+                                                           a.objectclas = 'EQKT' or
+                                                           a.objectclas = 'TJ02' or
+                                                           a.objectclas = 'TJ30' or
+                                                           a.objectclas = '/CGDC/EQUI_ADD' )
+                                                    and  ( a.change_ind = 'U' )
+                                                    and  ( fname = 'ZZ_LM_LOC' or
+                                                           fname = 'ZZ_CUR_OFF_LOC'  or
+                                                           fname = 'ZZSUBCONPO'  or
+                                                           fname = 'ZZPOITEMNUM'  or
+                                                           fname = 'ZZ_CUR_FLOOR'  or
+                                                           fname = 'ZZ_CUR_COL'  or
+                                                           fname = 'ZZ_CUR_LGNUM'  or
+                                                           fname = 'ZZ_CUR_AREA'  or
+                                                           fname = 'ZZ_CUR_ROW'  or
+                                                           fname = 'ZZ_CUR_BIN'  or
+                                                           fname = 'ZZ_CUR_CUBE'  or
+                                                           fname = 'ZZ_CUR_RACK'  or
+                                                           fname = 'ZZ_CUR_CAB'  or
+                                                           fname = 'ZZ_CUR_TSK_CTR'  or
+                                                           fname = 'ZZ_CUR_GRID'  or
+                                                           fname = 'ZZ_CHKIN_DATE'  or
+                                                           fname = 'ZZ_CHKOUT_DATE'  or
+                                                           fname = 'ZZ_CHK_CODE'  or
+                                                           fname = 'ZZ_CHKOUT_LOC'  or
+                                                           fname = 'ZZ_USER_ID'  or
+                                                           fname = 'ZZ_USER_NAME'  or
+                                                           fname = 'ZZ_USER_SHIFT' )
+
+                                                    )
+                                                 ORDER BY equipment, udate desc, utime desc;
+
+
+
+  it_final =    SELECT  DISTINCT client,
+                       equipment,
+                         '' AS   zz_tl_tech_id,
+                         '' AS   eqktx,
+
+                       changenr,
+                       udate,
+                       utime,
+                         '' AS   zz_lm_loc,
+                         '' AS   zz_cur_off_loc,
+                         '' AS   zzsubconpo,
+                         '' AS   zzpoitemnum,
+                         '' AS   zz_cur_floor,
+                         '' AS   zz_cur_col,
+                         '' AS   zz_cur_lgnum,
+                         '' AS   zz_cur_area,
+                         '' AS   zz_cur_row,
+                         '' AS   zz_cur_bin,
+                         '' AS   zz_cur_cube,
+                         '' AS   zz_cur_rack,
+                         '' AS   zz_cur_cab,
+                         '' AS   zz_cur_tsk_ctr,
+                         '' AS   zz_cur_grid,
+                         '' AS   zz_chkin_date,
+                         '' AS   zz_chkout_date,
+                         '' AS   zz_chk_code,
+                         '' AS   zz_chkout_loc,
+                         '' AS   zz_user_id,
+                         '' AS   zz_user_name,
+                         '' AS   zz_user_shift
+
+                       FROM :lt_euip_change_log;
+
+
+   FOR lv_inx in 1..record_count( :it_final )  DO
+
+    lv_equipment = :it_final.equipment[ lv_inx  ];
+    lv_changenr = :it_final.changenr[ lv_inx  ];
+
+    IF ( lv_equipment_prev <> :lv_equipment OR lv_equipment_prev IS null ) THEN
+        is_equipment = SELECT *  FROM :lt_euip_details
+                                 WHERE equipment  = :lv_equipment limit 1;
+
+        it_final.zz_tl_tech_id[ lv_inx ] = :is_equipment.zz_tl_tech_id[ 1 ];
+        it_final.eqktx[ lv_inx ] = :is_equipment.eqktx[ 1 ];
+        it_final.zz_lm_loc[ lv_inx ] = :is_equipment.zz_lm_loc[ 1 ];
+        it_final.zz_cur_off_loc[ lv_inx ] = :is_equipment.zz_cur_off_loc[ 1 ];
+        it_final.zzsubconpo[ lv_inx ] = :is_equipment.zzsubconpo[ 1 ];
+        it_final.zzpoitemnum[ lv_inx ] = :is_equipment.zzpoitemnum[ 1 ];
+        it_final.zz_cur_floor[ lv_inx ] = :is_equipment.zz_cur_floor[ 1 ];
+        it_final.zz_cur_col[ lv_inx ] = :is_equipment.zz_cur_col[ 1 ];
+        it_final.zz_cur_lgnum[ lv_inx ] = :is_equipment.zz_cur_lgnum[ 1 ];
+        it_final.zz_cur_area[ lv_inx ] = :is_equipment.zz_cur_area[ 1 ];
+        it_final.zz_cur_row[ lv_inx ] = :is_equipment.zz_cur_row[ 1 ];
+        it_final.zz_cur_bin[ lv_inx ] = :is_equipment.zz_cur_bin[ 1 ];
+        it_final.zz_cur_cube[ lv_inx ] = :is_equipment.zz_cur_cube[ 1 ];
+        it_final.zz_cur_rack[ lv_inx ] = :is_equipment.zz_cur_rack[ 1 ];
+        it_final.zz_cur_cab[ lv_inx ] = :is_equipment.zz_cur_cab[ 1 ];
+        it_final.zz_cur_tsk_ctr[ lv_inx ] = :is_equipment.zz_cur_tsk_ctr[ 1 ];
+        it_final.zz_cur_grid[ lv_inx ] = :is_equipment.zz_cur_grid[ 1 ];
+        it_final.zz_chkin_date[ lv_inx ] = :is_equipment.zz_chkin_date[ 1 ];
+        it_final.zz_chkout_date[ lv_inx ] = :is_equipment.zz_chkout_date[ 1 ];
+        it_final.zz_chk_code[ lv_inx ] = :is_equipment.zz_chk_code[ 1 ];
+        it_final.zz_chkout_loc[ lv_inx ] = :is_equipment.zz_chkout_loc[ 1 ];
+        it_final.zz_user_id[ lv_inx ] = :is_equipment.zz_user_id[ 1 ];
+        it_final.zz_user_name[ lv_inx ] = :is_equipment.zz_user_name[ 1 ];
+        it_final.zz_user_shift[ lv_inx ] = :is_equipment.zz_user_shift[ 1 ];
+
+    ELSE
+        it_final.zz_tl_tech_id[ lv_inx ] = :is_equipment.zz_tl_tech_id[ 1 ];
+        it_final.eqktx[ lv_inx ] = :is_equipment.eqktx[ 1 ];
+        it_final.zz_lm_loc[ lv_inx ] = :is_equipment.zz_lm_loc[ 1 ];
+        it_final.zz_cur_off_loc[ lv_inx ] = :is_equipment.zz_cur_off_loc[ 1 ];
+        it_final.zzsubconpo[ lv_inx ] = :is_equipment.zzsubconpo[ 1 ];
+        it_final.zzpoitemnum[ lv_inx ] = :is_equipment.zzpoitemnum[ 1 ];
+        it_final.zz_cur_floor[ lv_inx ] = :is_equipment.zz_cur_floor[ 1 ];
+        it_final.zz_cur_col[ lv_inx ] = :is_equipment.zz_cur_col[ 1 ];
+        it_final.zz_cur_lgnum[ lv_inx ] = :is_equipment.zz_cur_lgnum[ 1 ];
+        it_final.zz_cur_area[ lv_inx ] = :is_equipment.zz_cur_area[ 1 ];
+        it_final.zz_cur_row[ lv_inx ] = :is_equipment.zz_cur_row[ 1 ];
+        it_final.zz_cur_bin[ lv_inx ] = :is_equipment.zz_cur_bin[ 1 ];
+        it_final.zz_cur_cube[ lv_inx ] = :is_equipment.zz_cur_cube[ 1 ];
+        it_final.zz_cur_rack[ lv_inx ] = :is_equipment.zz_cur_rack[ 1 ];
+        it_final.zz_cur_cab[ lv_inx ] = :is_equipment.zz_cur_cab[ 1 ];
+        it_final.zz_cur_tsk_ctr[ lv_inx ] = :is_equipment.zz_cur_tsk_ctr[ 1 ];
+        it_final.zz_cur_grid[ lv_inx ] = :is_equipment.zz_cur_grid[ 1 ];
+        it_final.zz_chkin_date[ lv_inx ] = :is_equipment.zz_chkin_date[ 1 ];
+        it_final.zz_chkout_date[ lv_inx ] = :is_equipment.zz_chkout_date[ 1 ];
+        it_final.zz_chk_code[ lv_inx ] = :is_equipment.zz_chk_code[ 1 ];
+        it_final.zz_chkout_loc[ lv_inx ] = :is_equipment.zz_chkout_loc[ 1 ];
+        it_final.zz_user_id[ lv_inx ] = :is_equipment.zz_user_id[ 1 ];
+        it_final.zz_user_name[ lv_inx ] = :is_equipment.zz_user_name[ 1 ];
+        it_final.zz_user_shift[ lv_inx ] = :is_equipment.zz_user_shift[ 1 ];
+
+    END if;
+
+
+    lv_equipment_prev = :lv_equipment;
+
+    it_equi_curr_change = SELECT client, equipment, changenr, fname, value_new, value_old, udate, utime
+                            FROM :lt_euip_change_log
+                            WHERE changenr   = lv_changenr
+                            AND    equipment = lv_equipment;
+
+
+
+   IF record_count( :it_equi_curr_change ) > 0 THEN
+
+   for lv_inx1 in 1..record_count( :it_equi_curr_change )  DO
+   if :it_equi_curr_change.equipment[  lv_inx1 ] = lv_equipment  and
+      :it_equi_curr_change.changenr[  lv_inx1 ] = lv_changenr then
+
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_LM_LOC' then
+        it_final.zz_lm_loc[ lv_inx ] =   :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_lm_loc[ 1 ] =   :it_equi_curr_change.value_old[ lv_inx1 ];
+        END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_OFF_LOC' then
+        it_final.zz_cur_off_loc[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_off_loc[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZSUBCONPO' then
+        it_final.zzsubconpo[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zzsubconpo[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZPOITEMNUM' then
+        it_final.zzpoitemnum[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zzpoitemnum[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_FLOOR' then
+        it_final.zz_cur_floor[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_floor[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_COL' then
+        it_final.zz_cur_col[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_col[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_LGNUM' then
+        it_final.zz_cur_lgnum[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_lgnum[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_AREA' then
+        it_final.zz_cur_area[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_area[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_ROW' then
+        it_final.zz_cur_row[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_row[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_BIN' then
+        it_final.zz_cur_bin[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_bin[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_CUBE' then
+        it_final.zz_cur_cube[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_cube[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_RACK' then
+        it_final.zz_cur_rack[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_rack[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_CAB' then
+        it_final.zz_cur_cab[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_cab[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_TSK_CTR' then
+        it_final.zz_cur_tsk_ctr[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_tsk_ctr[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CUR_GRID' then
+        it_final.zz_cur_grid[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_cur_grid[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CHKIN_DATE' then
+        it_final.zz_chkin_date[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_chkin_date[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CHKOUT_DATE' then
+        it_final.zz_chkout_date[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_chkout_date[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CHK_CODE' then
+        it_final.zz_chk_code[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_chk_code[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_CHKOUT_LOC' then
+        it_final.zz_chkout_loc[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_chkout_loc[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_USER_ID' then
+        it_final.zz_user_id[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_user_id[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_USER_NAME' then
+        it_final.zz_user_name[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_user_name[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+    IF :it_equi_curr_change.fname[ lv_inx1 ] = 'ZZ_USER_SHIFT' then
+        it_final.zz_user_shift[ lv_inx ] = :it_equi_curr_change.value_new[ lv_inx1 ];
+        is_equipment.zz_user_shift[ 1 ] = :it_equi_curr_change.value_old[ lv_inx1 ];
+    END if;
+
+   END if;
+
+    END for;
+    END if;
+   END for;
+
+RETURN :it_final;
+
+  ENDMETHOD.
+ENDCLASS.
