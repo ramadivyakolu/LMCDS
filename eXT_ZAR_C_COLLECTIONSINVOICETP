@@ -1,0 +1,848 @@
+@Metadata.layer: #CUSTOMER
+@UI: { headerInfo: { title:          { value: 'AccountingDocument' },
+                     typeName:       'Invoice',
+                     typeNamePlural: 'Invoice Items' },
+       presentationVariant: [ { requestAtLeast: [ 'PostingKey',
+                                                  'PostingKeyName',
+                                                  'Customer',
+                                                  'CompanyCode',
+                                                  'CompanyCodeName',
+                                                  'AccountingDocument',
+                                                  'FiscalYear',
+                                                  'AccountingDocumentItem',
+                                                  'ZZ1_Priority_code_PRA',
+                                                  'Criticality',
+                                                  'DisputeCase',
+                                                  'PromiseToPay',
+                                                  'CollectionSegment',
+                                                  'CollectionSpecialist',
+                                                  'CollectionResponsibility',
+                                                  'ReferenceDocumentLogicalSystem',
+                                                  'UICT_BillingDocumentIcon',
+                                                  'BillingDocument' ]}],
+        selectionVariant: [ 
+        
+             { qualifier: 'AllOpenInvoices',
+                             id:        'OpenInvoices',
+                             text:      'All Open Invoices' },
+                           { qualifier: 'FundingValidation',
+                             id:        'FundingValidation',
+                             text:      'Funding Validation',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000001"' },
+                          { qualifier: 'WAWF-Submitted',
+                             id:        'WAWF - Submitted',
+                             text:      'WAWF - Submitted',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000002"' },
+                          { qualifier: 'WAWF-Inspected',
+                             id:        'WAWF-Inspected',
+                             text:      'WAWF - Inspected',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000003"' },
+                           
+                             
+                           { qualifier: 'WAWF-Rejected',
+                             id:        'WAWF-Rejected',
+                             text:      'WAWF - Rejected',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000004"' },
+                             
+                             { qualifier: 'WAWF-Suspended',
+                             id:        'WAWF-Suspended',
+                             text:      'WAWF - Suspended',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000005"' },
+                           { qualifier: 'WAWF-Processed',
+                             id:        'WAWF-Processed',
+                             text:      'WAWF - Processed',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000006"' },
+                             
+                           { qualifier: 'DFAS-Code A',
+                             id:        'DFAS-Code A',
+                             text:      'DFAS - Code A',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000007"' } ,
+                            { qualifier: 'DFAS-Code G',
+                             id:        'DFAS-Code G',
+                             text:      'DFAS - Code G',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000008"' } , 
+                            { qualifier: 'DFAS-Code GAREQ',
+                             id:        'DFAS-Code GAREQ',
+                             text:      'DFAS - Code GAREQ',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000009"' } , 
+                            { qualifier: 'Shortpay - Over 1M',
+                             id:        'Shortpay - Over 1M',
+                             text:      'Shortpay - Over 1M',
+                             filter:    'ZZ1_Priority_code_PRA EQ "0000010"' } , 
+                             { qualifier: 'Shortpay - 100K to 1M',
+                             id:        'Shortpay - 100K to 1M',
+                             text:      'Shortpay - 100K to 1M',
+                             filter:    'ZZ1_Priority_code_PRA EQ "0000011"' } ,   
+                              { qualifier: 'DFAS-Code B',
+                             id:        'DFAS-Code B',
+                             text:      'DFAS - Code B',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000012"' } ,  
+                             
+                            { qualifier: 'Shortpay - Under 100K',
+                             id:        'Shortpay - Under 100K',
+                             text:      'Shortpay - Under 100K',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000013"' } , 
+                                { qualifier: 'DFAS-Code D',
+                             id:        'DFAS-Code D',
+                             text:      'DFAS - Code D',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000014"' } ,   
+                            { qualifier: 'DFAS-Code DMACT',
+                             id:        'DFAS-Code DMACT',
+                             text:      'DFAS - Code DMACT',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000015"' } , 
+                             { qualifier: 'DFAS-Code DCDR',
+                             id:        'DFAS-Code DCDR',
+                             text:      'DFAS - Code DCDR',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000016"' } ,  
+                               { qualifier: 'DFAS-Code E',
+                             id:        'DFAS-Code E',
+                             text:      'DFAS - Code E',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000017"' } , 
+                                { qualifier: 'DFAS-Code F',
+                             id:        'DFAS-Code F',
+                             text:      'DFAS - Code F',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000018"' } ,
+                               { qualifier: 'DFAS-Code I',
+                             id:        'DFAS-Code I',
+                             text:      'DFAS - Code I',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000019"' } , 
+                                { qualifier: 'DFAS-Code J',
+                             id:        'DFAS-Code J',
+                             text:      'DFAS - Code J',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000020"' } ,
+                                { qualifier: 'DFAS-Code S',
+                             id:        'DFAS-Code S',
+                             text:      'DFAS - Code S',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000023"' } ,
+                                { qualifier: 'DFAS-Code X',
+                             id:        'DFAS-Code X',
+                             text:      'DFAS - Code X',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000025"' } ,
+                               { qualifier: 'DFAS-Code GAREQ',
+                             id:        'DFAS-Code JAUD',
+                             text:      'DFAS - Code JAUD',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000021"' } , 
+                                { qualifier: 'DFAS-Code JAREQ',
+                             id:        'DFAS-Code JAREQ',
+                             text:      'DFAS - Code JAREQ',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000022"' } , 
+                                { qualifier: 'DFAS-Code FVOID',
+                             id:        'DFAS-Code FVOID',
+                             text:      'DFAS - Code FVOID',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000024"' } ,  
+                               { qualifier: 'Credit-Billed Credit RMS_MFC',
+                             id:        'Credit-Billed Credit RMS_MFC',
+                             text:      'Credit-Billed Credit RMS_MFC',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000026"' } ,  
+                                    { qualifier: 'Credit-Billed Credit RMS_MFC',
+                             id:        'Credit Overpayment',
+                             text:      'Credit Overpayment',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000027"' } ,  
+                                 { qualifier: 'NonDFAS Invoice Alert',
+                             id:        'NonDFAS Invoice Alert',
+                             text:      'NonDFAS Invoice Alert',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000028"' },
+                             
+                             { qualifier: 'NonDFAS Invoice Past Due',
+                             id:        'NonDFAS Invoice Past Due',
+                             text:      'NonDFAS Invoice Past Due',
+                             filter:    'ZZ1_Priority_code_PRA EQ "000029"' }      
+                             
+                              ],                                           
+        presentationVariant: [{sortOrder: [{  by:  'OverdueDays',
+                      direction: #DESC }]}],
+        lineItem: [ { criticality: 'Criticality' } ]
+ }
+
+annotate view  ZAR_C_COLLECTIONSINVOICETP
+    with 
+{
+      @UI: { facet: [
+//                  // Header Facets
+                  { id:                 'KeyInformation',
+                    purpose:            #HEADER,
+                    type:               #FIELDGROUP_REFERENCE,
+                    position:           10,
+                    label:              'Key Information',
+                    targetQualifier:    'KeyInformation' },
+                  { id:                 'OverdueDays',
+                    purpose:            #HEADER,
+                    type:               #DATAPOINT_REFERENCE,
+                    position:           20,
+                    label:              'Overdue Days',
+                    targetQualifier:    'OverdueDays' },
+                         { id:                 'DocumentItemNote',
+                    purpose:            #HEADER,
+                    type:               #FIELDGROUP_REFERENCE,
+                    position:           30,
+                    label:              'Journal Entry Text',
+                    targetQualifier:    'DocumentItemTextFacet' },
+                   { id:                 'EditDataFacet',
+                    purpose:            #STANDARD,
+                    type:               #FIELDGROUP_REFERENCE,
+                    position:           10,
+                    targetQualifier: 'EditDataFacet',
+                    label:              'Edit Data' },  
+                    
+                  { id:                 'OperativeDataFacet',
+                    purpose:            #STANDARD,
+                    type:               #COLLECTION,
+                    position:           10,
+                    label:              'Operative Data' },
+                      { id:                 'Amounts',
+                        purpose:            #STANDARD,
+                        type:               #FIELDGROUP_REFERENCE,
+                        position:           10,
+                        label:              'Amounts',
+                        targetQualifier:    'AmountsFacet',
+                        parentId:           'OperativeDataFacet' },
+                      { id:                 'Dates',
+                        purpose:            #STANDARD,
+                        type:               #FIELDGROUP_REFERENCE,
+                        position:           20,
+                        label:              'Processing Dates',
+                        targetQualifier:    'DatesFacet',
+                        parentId:           'OperativeDataFacet' },
+                        
+                   { id:                 'PostingDataFacet',
+                    purpose:            #STANDARD,
+                    type:               #COLLECTION,
+                    position:           20,
+                    label:              'Posting Data' },
+                      { id:                 'DunningData',
+                        purpose:            #STANDARD,
+                        type:               #FIELDGROUP_REFERENCE,
+                        position:           30,
+                        label:              'Dunning Data',
+                        targetQualifier:    'DunningFacet',
+                        parentId:           'PostingDataFacet' },
+                      { id:                 'PostingData',
+                        purpose:            #STANDARD,
+                        type:               #FIELDGROUP_REFERENCE,
+                        position:           40,
+                        label:              'Posting Data',
+                        targetQualifier:    'PostingFacet',
+                        parentId:           'PostingDataFacet' },
+                      { id:                 'ReferenceData',
+                        purpose:            #STANDARD,
+                        type:               #FIELDGROUP_REFERENCE,
+                        position:           50,
+                        label:              'Reference Data',
+                        targetQualifier:    'ReferenceFacet' },
+                  { id:                 'Note',
+                    purpose:            #STANDARD,
+                    type:               #LINEITEM_REFERENCE,
+                    position:           60,
+                    label:              'Notes',
+                    targetElement:      '_CollectionsInvoiceNote' } ] }
+//                  { id:                 'DocumentItemNote',
+//                    purpose:            #HEADER,
+//                    type:               #FIELDGROUP_REFERENCE,
+//                    position:           30,
+//                    label:              'Journal Entry Text',
+//                    targetQualifier:    'DocumentItemTextFacet' },
+//
+//                  // Rerefence Facets
+//                  { id:                 'OperativeDataFacet',
+//                    purpose:            #STANDARD,
+//                    type:               #COLLECTION,
+//                    position:           10,
+//                    label:              'Operative Data' },
+//                      { id:                 'Amounts',
+//                        purpose:            #STANDARD,
+//                        type:               #FIELDGROUP_REFERENCE,
+//                        position:           10,
+//                        label:              'Amounts',
+//                        targetQualifier:    'AmountsFacet',
+//                        parentId:           'OperativeDataFacet' },
+//                      { id:                 'Dates',
+//                        purpose:            #STANDARD,
+//                        type:               #FIELDGROUP_REFERENCE,
+//                        position:           20,
+//                        label:              'Processing Dates',
+//                        targetQualifier:    'DatesFacet',
+//                        parentId:           'OperativeDataFacet' },
+//                  { id:                 'PostingDataFacet',
+//                    purpose:            #STANDARD,
+//                    type:               #COLLECTION,
+//                    position:           20,
+//                    label:              'Posting Data' },
+//                      { id:                 'DunningData',
+//                        purpose:            #STANDARD,
+//                        type:               #FIELDGROUP_REFERENCE,
+//                        position:           30,
+//                        label:              'Dunning Data',
+//                        targetQualifier:    'DunningFacet',
+//                        parentId:           'PostingDataFacet' },
+//                      { id:                 'PostingData',
+//                        purpose:            #STANDARD,
+//                        type:               #FIELDGROUP_REFERENCE,
+//                        position:           40,
+//                        label:              'Posting Data',
+//                        targetQualifier:    'PostingFacet',
+//                        parentId:           'PostingDataFacet' },
+//                      { id:                 'ReferenceData',
+//                        purpose:            #STANDARD,
+//                        type:               #FIELDGROUP_REFERENCE,
+//                        position:           50,
+//                        label:              'Reference Data',
+//                        targetQualifier:    'ReferenceFacet' }],
+
+                  // Line Item Facets
+//                  { id:                 'DisputeCase',
+//                    purpose:            #STANDARD,
+//                    type:               #LINEITEM_REFERENCE,
+//                    position:           50,
+//                    label:              'Dispute Cases',
+//                    targetElement:      '_LinkedDisputeCase',
+//                    hidden:             #(UICT_CollectionSegment) },
+//                  { id:                 'PromiseToPay',
+//                    purpose:            #STANDARD,
+//                    type:               #LINEITEM_REFERENCE,
+//                    position:           60,
+//                    label:              'Promises To Pay',
+//                    targetElement:      '_LinkedPromiseToPay',
+//                    hidden:             #(UICT_CollectionSegment) },
+//                  { id:                 'Resubmission',
+//                    purpose:            #STANDARD,
+//                    type:               #LINEITEM_REFERENCE,
+//                    position:           70,
+//                    label:              'Resubmissions',
+//                    targetElement:      '_LinkedResubmission',
+//                    hidden:             #(UICT_CollectionSegment) },
+//                  { id:                 'Note',
+//                    purpose:            #STANDARD,
+//                    type:               #LINEITEM_REFERENCE,
+//                    position:           80,
+//                    label:              'Notes',
+//                    targetElement:      '_CollectionsInvoiceNote' } ] ,
+
+                    // Quick Views
+//                  { id:                 'KeyInformationQuick',
+//                    purpose:            #QUICK_VIEW,
+//                    type:               #FIELDGROUP_REFERENCE,
+//                    position:           10,
+//                    label:              'Key Information',
+//                    targetQualifier:    'KeyInformation' },
+//                  { id:                 'OverdueDaysQuick',
+//                    purpose:            #QUICK_VIEW,
+//                    type:               #DATAPOINT_REFERENCE,
+//                    position:           20,
+//                    label:              'Overdue Days',
+//                    targetQualifier:    'OverdueDays' },
+//                  { id:                 'DocumentItemNoteQuick',
+//                    purpose:            #QUICK_VIEW,
+//                    type:               #FIELDGROUP_REFERENCE,
+//                    position:           30,
+//                    label:              'Journal Entry Text',
+//                    targetQualifier:    'DocumentItemTextFacet' },
+//                  { id:                 'AmountsQuick',
+//                    purpose:            #QUICK_VIEW,
+//                    type:               #FIELDGROUP_REFERENCE,
+//                    position:           10,
+//                    label:              'Amounts',
+//                    targetQualifier:    'AmountsFacet' },
+//                  { id:                 'DatesQuick',
+//                    purpose:            #QUICK_VIEW,
+//                    type:               #FIELDGROUP_REFERENCE,
+//                    position:           20,
+//                    label:              'Processing Dates',
+//                    targetQualifier:    'DatesFacet' },
+//                  { id:                 'DunningDataQuick',
+//                    purpose:            #QUICK_VIEW,
+//                    type:               #FIELDGROUP_REFERENCE,
+//                    position:           30,
+//                    label:              'Dunning Data',
+//                    targetQualifier:    'DunningFacet' },
+//                  { id:                 'PostingDataQuick',
+//                    purpose:            #QUICK_VIEW,
+//                    type:               #FIELDGROUP_REFERENCE,
+//                    position:           40,
+//                    label:              'Posting Data',
+//                    targetQualifier:    'PostingFacet' },
+//                  { id:                 'ReferenceDataQuick',
+//                    purpose:            #QUICK_VIEW,
+//                    type:               #FIELDGROUP_REFERENCE,
+//                    position:           50,
+//                    label:              'Reference Data' } ],
+//                     selectionField: [ { position: 10 } ],
+   @UI:  { selectionField: [ { position: 10 } ],
+     fieldGroup: [ { position:  10,
+                         qualifier: 'KeyInformation' } ],
+         textArrangement: #TEXT_LAST, 
+         lineItem: [{ position: 45, importance: #MEDIUM }] }
+  @Consumption: { semanticObject: 'Customer', valueHelpDefinition: [ { entity: { element: 'Customer',
+                                                     name:    'I_Customer_VH' } } ] }
+                                                     
+  Customer;           
+  
+    @UI: { selectionField: [ { position: 20 }],
+         fieldGroup: [ { position:  40,
+                         qualifier: 'KeyInformation' } ],
+         textArrangement: #TEXT_LAST }
+  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_CompanyCodeVH',
+                                                     element: 'CompanyCode' } } ] }
+  CompanyCode;    
+                    
+    @UI: { lineItem: [ { position:   10,
+                       importance: #HIGH } ],
+//         fieldGroup: [ { position:  50,
+//                         qualifier: 'KeyInformation' } ],
+         textArrangement: #TEXT_LAST  }
+  @Consumption: { semanticObject: 'AccountingDocument' }
+   AccountingDocument;
+   
+     @UI: { lineItem: [ { position:   20,
+                       importance: #HIGH }
+//                        ,
+//                    { type: #FOR_ACTION,
+//                    dataAction: 'CreateResubmission',
+//                    label: 'Create Resubmission' } ,
+//                    
+//                    { type: #FOR_ACTION,
+//                    dataAction: 'CreateDisputeCase',
+//                    label: 'CreateDisputeCase' }  
+                     ],
+         fieldGroup: [ { position:  50,
+                         qualifier: 'PostingFacet' } ],
+         textArrangement: #TEXT_LAST,
+         hidden: true
+          }
+  @Consumption: {
+//          semanticObject: 'PostingKey',
+          
+           valueHelpDefinition: [ { entity: { name:    'I_PostingKey',
+                                                     element: 'PostingKey' } } ] }
+                                                     
+  PostingKey;
+  
+    @UI: {  selectionField: [ { position: 50 } ],
+    
+          lineItem: [{  position: 30, value: 'ZZ1_Priority_code_PRA' , 
+                      criticality: 'Criticality', importance: #HIGH,
+//                      type:#WITH_ACTION,  
+//                        inline: true,
+//                      label : 'Show Notes',
+    emphasized: true }],
+             fieldGroup: [ { position:  50,
+                         qualifier: 'KeyInformation' }],
+                         textArrangement: #TEXT_LAST  }
+     @Consumption: { valueHelpDefinition: [ { entity: { name:    'ZAR_PriorityCodeVH',
+                                                     element: 'CollectionPriorityCode' } } ] } 
+     @EndUserText.label: 'Priority'                                                                    
+  ZZ1_Priority_code_PRA;
+  
+    @UI: { lineItem: [ { position:                  40,
+                       criticality:               'UICT_OverdueDays',
+                       criticalityRepresentation: #WITHOUT_ICON,
+                       importance:                #HIGH } ],
+         fieldGroup: [ { position:  20,
+                         qualifier: 'DatesFacet' } ],
+         textArrangement: #TEXT_LAST }
+  NetDueDate;
+  @UI:{  
+           dataPoint: { criticality: 'UICT_OverdueDays',
+                      qualifier:   'OverdueDays' } }
+  OverdueDays;
+  
+    @UI: { lineItem: [ { position: 50,
+                       label:    'Original Amount',
+                       importance: #MEDIUM } ],
+         fieldGroup: [ { qualifier: 'AmountsFacet',
+                         position:  10 } ] }
+  AmountInTransactionCurrency;
+  
+  @UI: { lineItem: [ { position:   60,
+                       label:      'Open Amount',
+                       importance: #HIGH } ],
+         fieldGroup: [ { qualifier: 'AmountsFacet',
+                         position:  20 } ] }
+  OpenAmountInDocumentCurrency;
+
+  @UI: { lineItem: [ { position:   70,
+                       label:      'Paid Amount',
+                       importance: #MEDIUM } ],
+         fieldGroup: [ { qualifier: 'AmountsFacet',
+                         position:  30 } ] }
+  PaidAmount;
+  
+   @UI: { lineItem: [ { position:   80,
+                       label:      'Credited Amount',
+                       importance: #MEDIUM } ],
+         fieldGroup: [ { qualifier: 'AmountsFacet',
+                         position:  40 } ] }
+  CreditedAmount;
+  
+  @UI.selectionField: [{ position: 90 }]
+  @UI.fieldGroup: [{qualifier: 'EditDataFacet', position: 10, importance: #MEDIUM, label :'Action Taken' }]
+  ActionTaken;
+
+  @UI: {  selectionField: [ { position: 100 } ],
+                lineItem: [ { position: 100, label: 'Contract', importance: #MEDIUM } ], 
+         textArrangement: #TEXT_LAST  }
+  @EndUserText.label: 'Contract'                                                                    
+  CustNumber;
+
+
+  @UI: {  selectionField: [ { position: 110 } ],
+                lineItem: [ { position: 100, label: 'Delivery Order Number', importance: #MEDIUM } ],              
+         textArrangement: #TEXT_LAST  }
+  @EndUserText.label: 'Delivery Order Number'                                                                    
+  CallNumber;
+   @EndUserText.label: 'Days to Defer'
+   @UI.fieldGroup: [{qualifier: 'EditDataFacet', position: 20, importance: #MEDIUM, label :'Days to Defer' }]
+  DaystoDefer;
+   @UI.fieldGroup: [{qualifier: 'EditDataFacet', position: 30, importance: #MEDIUM, label :'Promise to Pay Date' }]
+  PromisetoPayDate;
+   @UI.fieldGroup: [{qualifier: 'EditDataFacet', position: 40, importance: #MEDIUM, label :'Override Funding Validation' }]
+  FundingValidationOverride;
+  
+  
+  
+  @UI: { fieldGroup: [ { position: 10,
+                           qualifier: 'DatesFacet' } ] }
+  DocumentDate;
+
+  @UI: { fieldGroup: [ { position: 30,
+                           qualifier: 'DatesFacet' } ] }
+  PostingDate;
+
+  @UI: { fieldGroup: [ { position: 40,
+                           qualifier: 'DatesFacet' } ] }
+  CashDiscount1Days;
+  @UI: { selectionField: [ { position: 40 } ],
+         lineItem: [ { position:   90,
+                       label:      'Collection Specialist',
+                       importance: #MEDIUM } ],
+//         fieldGroup: [ { qualifier: 'AmountsFacet',
+//                         position:  40 } ],
+                         textArrangement: #TEXT_LAST } 
+    @Consumption: { valueHelpDefinition: [ { entity: { name:    'ZAR_COllECTIONSPL_DD',
+                                                     element: 'CollectionSpecialist' } } ]
+//                                                     ,
+//                                                      filter.defaultValue: 'N5697F' 
+                                                      
+                                                      } 
+                                                                            
+  CollectionSpecialist;
+   @UI: { 
+           selectionField: [ { position: 30 } ],
+   lineItem: [ { position:   100,
+                       label:      'Collection Responsibility',
+                       importance: #MEDIUM } ],
+//         fieldGroup: [ { qualifier: 'AmountsFacet',
+//                         position:  40 } ] ,
+                         textArrangement: #TEXT_LAST } 
+    @Consumption: { valueHelpDefinition: [ { entity: { name:    'ZAR_CUSTOMERATTRIBUTESTEXT',
+                                                     element: 'Attribute1' } } ] }                       
+                         
+ @EndUserText.label: 'Collection Responsibility'                     
+  CollectionResponsibility;
+   @UI: { 
+           selectionField: [ { position: 70 } ],
+   lineItem: [ { position:   100,
+                       label:      'Collection Group',
+                       importance: #MEDIUM } ],
+//         fieldGroup: [ { qualifier: 'AmountsFacet',
+//                         position:  40 } ] ,
+                         textArrangement: #TEXT_LAST } 
+      @Consumption.valueHelpDefinition:
+      [{  entity: {name: 'I_COLLECTIONGROUP', element: 'CollectionGroup'}, useForValidation: true  }]                
+  CollectionGroup;
+      @UI: { lineItem: [ { position:   110,
+                       importance: #LOW } ],
+//         fieldGroup: [ { position:  50,
+//                         qualifier: 'KeyInformation' } ],
+         textArrangement: #TEXT_LAST  }
+  PaymentTerms;
+  
+        @UI: { selectionField: [ { position: 60 } ],
+            lineItem: [ { position:   120,
+                       importance: #LOW } ],
+         fieldGroup: [ { position:  50,
+                         qualifier: 'KeyInformation' } ],
+         textArrangement: #TEXT_LAST  }
+     @Consumption.valueHelpDefinition:
+      [{  entity: {name: 'I_SegmentStdVH', element: 'Segment'}, useForValidation: true   }]     
+    @EndUserText.label: 'Business Area'     
+  Segment;
+         @UI: { lineItem: [ { position:   130,
+                       importance: #LOW } ],
+//         fieldGroup: [ { position:  50,
+//                         qualifier: 'KeyInformation' } ],
+         textArrangement: #TEXT_LAST  }
+ ProfitCenter; 
+ 
+   @UI: { multiLineText: true,
+         fieldGroup: [ { qualifier: 'DocumentItemTextFacet',
+                         position: 10 } ] }
+  DocumentItemText;
+ 
+   @UI: { fieldGroup: [ { position:  60,
+                         qualifier: 'KeyInformation' } ] }
+  FiscalYear;
+
+  @UI: { fieldGroup: [ { position:  70,
+                         qualifier: 'KeyInformation' } ] }
+  AccountingDocumentItem;
+ 
+        @UI: { lineItem: [ { position:   140,
+                       importance: #LOW } ],
+//         fieldGroup: [ { position:  50,
+//                         qualifier: 'KeyInformation' } ],
+         textArrangement: #TEXT_LAST  }
+         
+    DocumentType;  
+        @UI: { lineItem: [ { position:   150,
+                       importance: #LOW } ],
+//         fieldGroup: [ { position:  50,
+//                         qualifier: 'KeyInformation' } ],
+         textArrangement: #TEXT_LAST  }
+    
+    OverPaymentReasonCode;   
+    
+      @UI: { fieldGroup: [ { position:  40,
+                         qualifier: 'DatesFacet' } ] }
+        ZZ1_ACCEPTANCE_DT_PRA;   
+        
+       
+      @UI: { fieldGroup: [ { position:  50,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_ACCT_DOC_NBR_PRA;    
+        
+         
+      @UI: { fieldGroup: [ { position:  60,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_ACTION_STATUS_PRA;
+        
+         
+      @UI: { fieldGroup: [ { position:  30,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_CONTRACT_NBR_PRA; 
+        
+         
+      @UI: { fieldGroup: [ { position:  70,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_COST_VOUCHER_NBR_PRA;   
+        
+         
+      @UI: { fieldGroup: [ { position:  80,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_DELIVERY_ORDER_NBR_PRA;
+        
+         
+      @UI: { fieldGroup: [ { position:  90,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_FUND_STATUS_PRA;
+        
+         
+      @UI: { fieldGroup: [ { position:  100,
+                         qualifier: 'DatesFacet' } ] }
+        ZZ1_PROCESSED_DT_PRA; 
+        
+         
+      @UI: { fieldGroup: [ { position:  110,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_REJECT_MESSAGES_PRA; 
+        
+       
+      @UI: { lineItem: [ { position:   55,
+                       label:      'My Invoice Status History',
+                       importance: #MEDIUM } ],
+      
+              fieldGroup: [ { position:  120,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_STATUS_HISTORY_PRA; 
+        
+        
+         
+      @UI: { fieldGroup: [ { position:  130,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_WAWF_DOC_TYPE_PRA;    
+        
+        
+         
+      @UI: { fieldGroup: [ { position:  140,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_WAWF_INVOICE_NBR_PRA;
+        
+         
+      @UI: { fieldGroup: [ { position:  150,
+                         qualifier: 'ReferenceFacet' } ] }
+        ZZ1_WAWF_SHIPMENT_NBR_PRA;                           
+
+  @UI: { fieldGroup: [ { qualifier: 'AmountsFacet',
+                         position:  50 } ] }
+  ArrangedAmount;
+
+  @UI: { fieldGroup: [ { qualifier: 'AmountsFacet',
+                         position:  60 } ] }
+  DunnedAmount;
+
+  @UI: { fieldGroup: [ { qualifier: 'AmountsFacet',
+                         position:  70 } ] }
+  CashDiscountAmtInTransacCrcy;
+
+
+
+  @UI: { fieldGroup: [ { position: 10,
+                         qualifier: 'DunningFacet' } ] }
+  LastDunningDate;
+
+  @UI: { fieldGroup: [ { position: 20,
+                         qualifier: 'DunningFacet' } ],
+         textArrangement: #TEXT_LAST }
+  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_DunningBlockingReasonCode',
+                                                     element: 'DunningBlockingReason' } } ] }
+  DunningBlockingReason;
+
+  @UI: { fieldGroup: [ { position: 30,
+                         qualifier: 'DunningFacet' } ] }
+  DunningLevel;
+
+  @UI: { hidden: true }
+  DisputeCase;
+
+  @UI: { hidden: true }
+  PromiseToPay;
+
+  @UI: { fieldGroup: [ { position: 10,
+                         qualifier: 'PostingFacet' } ],
+         textArrangement: #TEXT_LAST }
+  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_PaymentMethodVH',
+                                                     element: 'PaymentMethod' } } ] }
+  PaymentMethod;
+
+  @UI: { fieldGroup: [ { position: 20,
+                         qualifier: 'PostingFacet' } ] }
+  PaymentDate;
+
+  @UI: { fieldGroup: [ { position: 30,
+                         qualifier: 'PostingFacet' } ] }
+  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_SpecialGLCode',
+                                                     element: 'SpecialGLCode' } } ] }
+  SpecialGLCode;
+
+  @UI: { fieldGroup: [ { position: 40,
+                         qualifier: 'PostingFacet' } ] }
+  OperationalGLAccount;
+
+  @UI: { fieldGroup: [ { position:  10,
+                         qualifier: 'ReferenceFacet' } ] }
+  @Consumption: { semanticObject: 'BillingDocument' }
+  BillingDocument;
+
+  @UI: { fieldGroup: [ { position:  10,
+                         qualifier: 'ReferenceFacet' } ] }
+  DocumentReferenceID;
+
+  @UI: { fieldGroup: [ { position:  20,
+                         qualifier: 'ReferenceFacet' } ] }
+  Reference1InDocumentHeader;
+
+  @UI: {fieldGroup: [ { position:  30,
+                         qualifier: 'ReferenceFacet' } ] }
+  Reference2InDocumentHeader;
+
+  @UI: { hidden: true }
+  resubmissionduedate;
+
+  @UI: { textArrangement: #TEXT_LAST }
+  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_DisputeCaseStatusVH',
+                                                     element: 'CaseStatus' } } ] }
+  CaseStatus;
+
+  @UI: { textArrangement: #TEXT_LAST }
+  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_CollsPromiseToPayStatusVH',
+                                                     element: 'PromiseToPayStatus' } } ] }
+  PromiseToPayStatus;
+
+  @UI: { textArrangement: #TEXT_LAST }
+  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_DisputeCaseReasonVH',
+                                                     element: 'CaseReason' } } ] }
+  CaseReason;
+
+  @UI: { hidden: true }
+  LatePaymentRisk;
+  
+  @UI: { hidden: true }
+  LatePaymentRiskName;
+
+  @UI: { hidden: true }
+  ReasonCodeName;
+
+  @UI: { hidden: true }
+  PromiseToPayStatusName;
+
+  @UI: { hidden: true }
+  PostingKeyName;
+
+  @UI: { hidden: true }
+  SpecialGLCodeLongName;
+
+  @UI: { hidden: true }
+  DunningBlockingReasonDesc;
+
+  @UI: { hidden: true }
+  CollectionSegmentName;
+
+  @UI: { hidden: true }
+  CompanyCodeName;
+
+  @UI: { hidden: true }
+  CustomerName;
+
+  @UI: { hidden: true }
+  BranchAccountName;
+
+  @UI: { hidden: true }
+  ObjectKey;
+
+  @UI: { hidden: true }
+  PaymentMethodDescription;
+
+  @UI: { hidden: true }
+  UICT_OverdueDays;
+
+  @UI: { hidden: true }
+  UICT_CollectionSegment;
+
+  @UI: { hidden: true }
+  NumberOfResubmissions;
+
+//  @UI: { hidden: true }
+//  resubmissionuuid;
+//
+//  @UI: { hidden: true }
+//  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_ResubmissionReasonVH',
+//                                                     element: 'ResubmissionReason' } } ] }
+//  resubmissionreason;
+//
+//  @UI: { hidden: true }
+//  CaseStatusName;
+//
+//  @UI: { hidden: true }
+//  caseuniqueid;
+
+  @UI: { hidden: true }
+  ReferenceDocumentLogicalSystem;
+
+  @Consumption: { valueHelpDefinition: [ { entity: { name:    'I_CurrencyStdVH',
+                                                     element: 'Currency' } } ] }
+  //@UI.hidden: true                                                     
+  TransactionCurrency;
+
+  @EndUserText: { label:     'Priority',
+                  quickInfo: 'Priority for Item' }
+  Criticality;
+
+  @UI: { hidden: true }
+  UICT_BillingDocumentIcon;
+
+  @UI: { hidden: true }
+  LastDunningDurationInDays;
+  
+  @UI.hidden: true
+  DeferredTillDate;
+    
+}
