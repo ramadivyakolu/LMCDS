@@ -1,0 +1,372 @@
+@AbapCatalog.sqlViewName: 'ZISDPCFLATH'
+@AbapCatalog.compiler.compareFilter: true
+@AbapCatalog.preserveKey: true
+@AccessControl.authorizationCheck: #CHECK
+@EndUserText.label: 'Profit Ctr - Flattened Hierarchy'
+define view ZI_PROFITCERTNER_HIER_FLAT
+  as select from    hrrp_node L01
+    join            hrrp_nodet T01 on  L01.hryid   = T01.hryid
+                                   and L01.hryver  = T01.hryver
+                                   and L01.nodecls = T01.nodecls
+                                   and L01.hrynode = T01.hrynode
+
+    left outer join hrrp_node L02  on  L01.hryid   = L02.hryid
+                                   and L01.hryver  = L02.hryver
+                                   and L01.nodecls = L02.nodecls
+                                   and L01.hrynode = L02.parnode
+
+    left outer join hrrp_nodet T02 on  L02.hryid   = T02.hryid
+                                   and L02.hryver  = T02.hryver
+                                   and L02.nodecls = T02.nodecls
+                                   and L02.hrynode = T02.hrynode
+
+    left outer join hrrp_node L03  on  L02.hryid   = L03.hryid
+                                   and L02.hryver  = L03.hryver
+                                   and L02.nodecls = L03.nodecls
+                                   and L02.hrynode = L03.parnode
+
+    left outer join hrrp_nodet T03 on  L03.hryid   = T03.hryid
+                                   and L03.hryver  = T03.hryver
+                                   and L03.nodecls = T03.nodecls
+                                   and L03.hrynode = T03.hrynode
+
+    left outer join hrrp_node L04  on  L03.hryid   = L04.hryid
+                                   and L03.hryver  = L04.hryver
+                                   and L03.nodecls = L04.nodecls
+                                   and L03.hrynode = L04.parnode
+
+    left outer join hrrp_nodet T04 on  L04.hryid   = T04.hryid
+                                   and L04.hryver  = T04.hryver
+                                   and L04.nodecls = T04.nodecls
+                                   and L04.hrynode = T04.hrynode
+
+    left outer join hrrp_node L05  on  L04.hryid   = L05.hryid
+                                   and L04.hryver  = L05.hryver
+                                   and L04.nodecls = L05.nodecls
+                                   and L04.hrynode = L05.parnode
+
+    left outer join hrrp_nodet T05 on  L05.hryid   = T05.hryid
+                                   and L05.hryver  = T05.hryver
+                                   and L05.nodecls = T05.nodecls
+                                   and L05.hrynode = T05.hrynode
+
+    left outer join hrrp_node L06  on  L05.hryid   = L06.hryid
+                                   and L05.hryver  = L06.hryver
+                                   and L05.nodecls = L06.nodecls
+                                   and L05.hrynode = L06.parnode
+
+    left outer join hrrp_nodet T06 on  L06.hryid   = T06.hryid
+                                   and L06.hryver  = T06.hryver
+                                   and L06.nodecls = T06.nodecls
+                                   and L06.hrynode = T06.hrynode
+
+    left outer join hrrp_node L07  on  L06.hryid   = L07.hryid
+                                   and L06.hryver  = L07.hryver
+                                   and L06.nodecls = L07.nodecls
+                                   and L06.hrynode = L07.parnode
+
+    left outer join hrrp_nodet T07 on  L07.hryid   = T07.hryid
+                                   and L07.hryver  = T07.hryver
+                                   and L07.nodecls = T07.nodecls
+                                   and L07.hrynode = T07.hrynode
+
+    left outer join hrrp_node L08  on  L07.hryid   = L08.hryid
+                                   and L07.hryver  = L08.hryver
+                                   and L07.nodecls = L08.nodecls
+                                   and L07.hrynode = L08.parnode
+
+    left outer join hrrp_nodet T08 on  L08.hryid   = T08.hryid
+                                   and L08.hryver  = T08.hryver
+                                   and L08.nodecls = T08.nodecls
+                                   and L08.hrynode = T08.hrynode
+
+    left outer join hrrp_node L09  on  L08.hryid   = L09.hryid
+                                   and L08.hryver  = L09.hryver
+                                   and L08.nodecls = L09.nodecls
+                                   and L08.hrynode = L09.parnode
+
+    left outer join hrrp_nodet T09 on  L09.hryid   = T09.hryid
+                                   and L09.hryver  = T09.hryver
+                                   and L09.nodecls = T09.nodecls
+                                   and L09.hrynode = T09.hrynode
+
+    left outer join hrrp_node L10  on  L09.hryid   = L10.hryid
+                                   and L09.hryver  = L10.hryver
+                                   and L09.nodecls = L10.nodecls
+                                   and L09.hrynode = L10.parnode
+
+    left outer join hrrp_nodet T10 on  L10.hryid   = T10.hryid
+                                   and L10.hryver  = T10.hryver
+                                   and L10.nodecls = T10.nodecls
+                                   and L10.hrynode = T10.hrynode
+
+    left outer join hrrp_node L11  on  L10.hryid   = L11.hryid
+                                   and L10.hryver  = L11.hryver
+                                   and L10.nodecls = L11.nodecls
+                                   and L10.hrynode = L11.parnode
+
+    left outer join hrrp_nodet T11 on  L11.hryid   = T11.hryid
+                                   and L11.hryver  = T11.hryver
+                                   and L11.nodecls = T11.nodecls
+                                   and L11.hrynode = T11.hrynode
+
+    left outer join hrrp_node L12  on  L11.hryid   = L12.hryid
+                                   and L11.hryver  = L12.hryver
+                                   and L11.nodecls = L12.nodecls
+                                   and L11.hrynode = L12.parnode
+
+    left outer join hrrp_nodet T12 on  L12.hryid   = T12.hryid
+                                   and L12.hryver  = T12.hryver
+                                   and L12.nodecls = T12.nodecls
+                                   and L12.hrynode = T12.hrynode
+
+    left outer join hrrp_node L13  on  L12.hryid   = L13.hryid
+                                   and L12.hryver  = L13.hryver
+                                   and L12.nodecls = L13.nodecls
+                                   and L12.hrynode = L13.parnode
+
+    left outer join hrrp_nodet T13 on  L13.hryid   = T13.hryid
+                                   and L13.hryver  = T13.hryver
+                                   and L13.nodecls = T13.nodecls
+                                   and L13.hrynode = T13.hrynode
+
+    left outer join hrrp_node L14  on  L13.hryid   = L14.hryid
+                                   and L13.hryver  = L14.hryver
+                                   and L13.nodecls = L14.nodecls
+                                   and L13.hrynode = L14.parnode
+
+    left outer join hrrp_nodet T14 on  L14.hryid   = T14.hryid
+                                   and L14.hryver  = T14.hryver
+                                   and L14.nodecls = T14.nodecls
+                                   and L14.hrynode = T14.hrynode
+
+    left outer join hrrp_node L15  on  L14.hryid   = L15.hryid
+                                   and L14.hryver  = L15.hryver
+                                   and L14.nodecls = L15.nodecls
+                                   and L14.hrynode = L15.parnode
+
+    left outer join hrrp_nodet T15 on  L15.hryid   = T15.hryid
+                                   and L15.hryver  = T15.hryver
+                                   and L15.nodecls = T15.nodecls
+                                   and L15.hrynode = T15.hrynode
+
+{
+  L01.mandt,
+  case
+   when L02.nodetype = 'L'
+    then L02.nodevalue
+   when L03.nodetype = 'L'
+    then L03.nodevalue
+   when L04.nodetype = 'L'
+    then L04.nodevalue
+   when L05.nodetype = 'L'
+    then L05.nodevalue
+   when L06.nodetype = 'L'
+    then L06.nodevalue
+   when L07.nodetype = 'L'
+    then L07.nodevalue
+   when L08.nodetype = 'L'
+    then L08.nodevalue
+   when L09.nodetype = 'L'
+    then L09.nodevalue
+   when L10.nodetype = 'L'
+    then L10.nodevalue
+   when L11.nodetype = 'L'
+    then L11.nodevalue
+   when L12.nodetype = 'L'
+    then L12.nodevalue
+   when L13.nodetype = 'L'
+    then L13.nodevalue
+   when L14.nodetype = 'L'
+    then L14.nodevalue
+   when L15.nodetype = 'L'
+    then L15.nodevalue
+   else ''
+  end           as PRCTR,
+  
+  @EndUserText.label: 'Level1'
+  L01.nodevalue as Levl1,
+
+  @EndUserText.label: 'Level1 Desc'
+  T01.nodetxt   as Level1Desc,
+
+  @EndUserText.label: 'Business Area'
+  case
+   when L02.nodetype = 'L'
+    then ''
+    else L02.nodevalue
+   end          as BusinessArea,
+
+  @EndUserText.label: 'Business Area Name'
+  case
+   when L02.nodetype = 'L'
+    then ''
+    else T02.nodetxt
+  end           as BusinessAreaDesc,
+
+  @EndUserText.label: 'Lines of Business'
+  case
+   when L03.nodetype = 'L'
+    then ''
+    else L03.nodevalue
+   end          as  Line_Of_Business_Desc,
+
+  @EndUserText.label: 'Lines of Business Name'
+  case
+   when L03.nodetype = 'L'
+    then ''
+    else T03.nodetxt
+  end           as  LineOfBusinessDesc,
+
+ 
+ 
+ 
+  @EndUserText.label: 'Market Segments'
+  case
+   when L04.nodetype = 'L'
+    then ''
+    else L04.nodevalue
+   end          as MarketSegments,
+
+  @EndUserText.label: 'Market Segments Name'
+  case
+   when L04.nodetype = 'L'
+    then ''
+    else T04.nodetxt
+  end           as MarketSegmentsDesc,
+
+  @EndUserText.label: 'Submarket'
+  case
+   when L05.nodetype = 'L'
+    then ''
+    else L05.nodevalue
+   end          as Submarket,
+
+  @EndUserText.label: 'Submarket Name'
+  case
+   when L05.nodetype = 'L'
+    then ''
+    else T05.nodetxt
+  end           as SubmarketDesc,
+
+  @EndUserText.label: 'Portfolio'
+  case
+   when L06.nodetype = 'L'
+    then ''
+    else L06.nodevalue
+   end          as Portfolio,
+
+  @EndUserText.label: 'Portfolio Name'
+  case
+   when L06.nodetype = 'L'
+    then ''
+    else T06.nodetxt
+  end           as PortfolioName,
+ case
+   when L02.nodetype = 'L'
+    then L02.nodevalue
+   when L03.nodetype = 'L'
+    then L03.nodevalue
+   when L04.nodetype = 'L'
+    then L04.nodevalue
+   when L05.nodetype = 'L'
+    then L05.nodevalue
+   when L06.nodetype = 'L'
+    then L06.nodevalue
+   when L07.nodetype = 'L'
+    then L07.nodevalue
+   when L08.nodetype = 'L'
+    then L08.nodevalue
+   when L09.nodetype = 'L'
+    then L09.nodevalue
+   when L10.nodetype = 'L'
+    then L10.nodevalue
+   when L11.nodetype = 'L'
+    then L11.nodevalue
+   when L12.nodetype = 'L'
+    then L12.nodevalue
+   when L13.nodetype = 'L'
+    then L13.nodevalue
+   when L14.nodetype = 'L'
+    then L14.nodevalue
+   when L15.nodetype = 'L'
+    then L15.nodevalue
+   else ''
+  end           as PROFITCENTERDESC
+}
+
+where
+       L01.hryid    =  '0106/LMCO/LM'
+  and  L01.hrylevel =  '000000'
+  and(
+       L02.nodetype <> 'D'
+    or L02.nodetype is null
+  )
+  and(
+       L03.nodetype <> 'D'
+    or L03.nodetype is null
+  )
+  and(
+       L04.nodetype <> 'D'
+    or L04.nodetype is null
+  )
+  and(
+       L05.nodetype <> 'D'
+    or L05.nodetype is null
+  )
+  and(
+       L06.nodetype <> 'D'
+    or L06.nodetype is null
+  )
+  and(
+       L07.nodetype <> 'D'
+    or L07.nodetype is null
+  )
+  and(
+       L08.nodetype <> 'D'
+    or L08.nodetype is null
+  )
+  and(
+       L09.nodetype <> 'D'
+    or L09.nodetype is null
+  )
+  and(
+       L10.nodetype <> 'D'
+    or L10.nodetype is null
+  )
+  and(
+       L11.nodetype <> 'D'
+    or L11.nodetype is null
+  )
+  and(
+       L12.nodetype <> 'D'
+    or L12.nodetype is null
+  )
+  and(
+       L13.nodetype <> 'D'
+    or L13.nodetype is null
+  )
+  and(
+       L14.nodetype <> 'D'
+    or L14.nodetype is null
+  )
+  and(
+       L15.nodetype <> 'D'
+    or L15.nodetype is null
+  )
+  and(
+       L02.nodetype =  'L'
+    or L03.nodetype =  'L'
+    or L04.nodetype =  'L'
+    or L05.nodetype =  'L'
+    or L06.nodetype =  'L'
+     or L07.nodetype =  'L'
+    or L08.nodetype =  'L'
+    or L09.nodetype =  'L'
+    or L10.nodetype =  'L'
+    or L11.nodetype =  'L'
+    or L12.nodetype =  'L'
+    or L13.nodetype =  'L'
+    or L14.nodetype =  'L'
+    or L15.nodetype =  'L'   
+  );
