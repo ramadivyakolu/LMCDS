@@ -1,0 +1,663 @@
+*******************************************************************
+* Report ZAR_OPEN_PAID_RPT_EXPORT
+*******************************************************************
+*******************************************************************
+*  Lockheed Martin Intellectual Property:
+*    © 2025 Lockheed Martin Corporation
+*******************************************************************
+*  Object: ZAR_OPEN_PAID_RPT_EXPORT
+*
+*  Technical Specification: AXX-00XXXX-R-TS-Description
+*  Description: XXXXXX XXX XXXXXXXX -High level description
+*
+*  Security Profile / Authority Information:  N/A
+*  Inputs: N/A
+*  Outputs: N/A
+*
+*
+*******************************************************************
+*  Changes History:
+*******************************************************************
+*  DATE           AUTHOR          TRANSPORT #          ACTION/DESCR
+*******************************************************************
+* 07/23/2025     N3848B     S4K948525                   CREATE
+
+* XX/XX/XXXX     XXX XXXXX     DS4K90XXXXXX         DEFECT ##/eBRB
+*******************************************************************
+REPORT zar_open_paid_rpt_export.
+
+TYPES: BEGIN OF ty_field_info,
+         fieldname TYPE string,
+         datatype  TYPE string,
+       END OF ty_field_info,
+       tt_field_info TYPE TABLE OF ty_field_info,
+       tt_string     TYPE TABLE OF string WITH DEFAULT KEY.
+
+TYPES: BEGIN OF ty_date_range,
+         from_date TYPE dats,
+         to_date   TYPE dats,
+       END OF ty_date_range.
+
+TYPES: BEGIN OF ty_processing_config,
+         mode        TYPE string,
+         cds_name    TYPE string,
+         file_prefix TYPE string,
+         days        TYPE i,
+       END OF ty_processing_config.
+
+TYPES: BEGIN OF ty_export_result,
+         success      TYPE abap_bool,
+         filepath     TYPE string,
+         record_count TYPE i,
+         message      TYPE string,
+       END OF ty_export_result.
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
+  PARAMETERS: p_clrdt TYPE dats DEFAULT sy-datum OBLIGATORY.
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
+  PARAMETERS: r_open  TYPE abap_bool RADIOBUTTON GROUP grp1 DEFAULT 'X'  USER-COMMAND dy1,
+              r_clear TYPE abap_bool RADIOBUTTON GROUP grp1  MODIF ID dy1.
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECTION-SCREEN BEGIN OF BLOCK b3 WITH FRAME TITLE TEXT-003.
+  PARAMETERS: p_days TYPE i DEFAULT 3 MODIF ID dy2,
+              p_path TYPE string OBLIGATORY LOWER CASE.
+SELECTION-SCREEN END OF BLOCK b3.
+
+
+*----------------------------------------------------------------------*
+* Date Range Calculation Forms
+*----------------------------------------------------------------------*
+FORM calculate_range USING iv_to_date TYPE dats
+                           iv_days TYPE i
+                     CHANGING rs_range TYPE ty_date_range.
+
+  rs_range-to_date = iv_to_date.
+
+  CALL FUNCTION 'CALCULATE_DATE'
+    EXPORTING
+      days        = ( iv_days * -1 )
+      months      = '0'
+      start_date  = iv_to_date
+    IMPORTING
+      result_date = rs_range-from_date.
+
+
+ENDFORM.
+
+FORM format_date_for_display USING iv_date TYPE dats
+                             CHANGING rv_formatted TYPE string.
+  rv_formatted = |{ iv_date DATE = USER }|.
+ENDFORM.
+
+
+FORM build_open_items_config USING iv_clearing_date TYPE dats
+                             CHANGING rs_config TYPE ty_processing_config.
+  rs_config = VALUE #(
+    mode = 'OPEN'
+    cds_name = 'ZC_SD_INV_OPEN_CLR_ITEM_EXP' " change view
+    file_prefix = 'open_items_export'
+    days = 30
+  ).
+ENDFORM.
+
+FORM build_cleared_items_config USING iv_clearing_date TYPE dats
+                                      iv_days TYPE i
+                                CHANGING rs_config TYPE ty_processing_config.
+  rs_config = VALUE #(
+    mode = 'CLEARED'
+    cds_name = 'ZI_SD_INV_OPEN_CLEARED_ITEMS'
+    file_prefix = 'cleared_items'
+    days = iv_days
+  ).
+ENDFORM.
+
+
+FORM fetch_open_items USING is_date_range TYPE ty_date_range
+                      CHANGING rr_data TYPE REF TO data.
+
+  DATA: lr_data_tab TYPE REF TO data.
+  FIELD-SYMBOLS: <lt_data> TYPE STANDARD TABLE.
+
+  CREATE DATA lr_data_tab TYPE STANDARD TABLE OF zc_sd_inv_open_clr_item_exp. " chnage view
+  ASSIGN lr_data_tab->* TO <lt_data>.
+
+  SELECT * FROM zc_sd_inv_open_clr_item_exp
+   WHERE clearingdate IS INITIAL
+    INTO TABLE @<lt_data>.
+
+  rr_data = lr_data_tab.
+ENDFORM.
+
+FORM fetch_cleared_items USING is_date_range TYPE ty_date_range
+                         CHANGING rr_data TYPE REF TO data.
+
+  DATA: lr_data_tab TYPE REF TO data.
+  FIELD-SYMBOLS: <lt_data> TYPE STANDARD TABLE.
+
+  CREATE DATA lr_data_tab TYPE STANDARD TABLE OF zc_sd_inv_open_clr_item_exp.
+  ASSIGN lr_data_tab->* TO <lt_data>.
+
+  DATA(lv_date) = is_date_range-to_date - p_days.
+
+  SELECT * FROM zc_sd_inv_open_clr_item_exp
+    INTO TABLE @<lt_data>
+    WHERE ClearingDate >=  @is_date_range-from_date AND   ClearingDate <=  @is_date_range-to_date.
+
+  rr_data = lr_data_tab.
+ENDFORM.
+
+FORM create_data_structure USING iv_mode TYPE string
+                           CHANGING rr_struct TYPE REF TO data.
+  CASE iv_mode.
+    WHEN 'OPEN'.
+      CREATE DATA rr_struct TYPE zc_sd_inv_open_clr_item_exp. "chnage view
+    WHEN 'CLEARED'.
+      CREATE DATA rr_struct TYPE zc_sd_inv_open_clr_item_exp.
+  ENDCASE.
+ENDFORM.
+
+
+FORM transform_to_csv USING ir_data TYPE REF TO data
+                      CHANGING rt_csv_lines TYPE tt_string.
+
+  DATA: lr_structure  TYPE REF TO data,
+        lv_header     TYPE string,
+        lt_data_lines TYPE tt_string.
+  FIELD-SYMBOLS: <lt_data> TYPE STANDARD TABLE,
+                 <ls_data> TYPE any.
+
+  ASSIGN ir_data->* TO <lt_data>.
+
+  IF lines( <lt_data> ) = 0.
+    RETURN.
+  ENDIF.
+
+  READ TABLE <lt_data> ASSIGNING <ls_data> INDEX 1.
+  GET REFERENCE OF <ls_data> INTO lr_structure.
+
+  PERFORM create_header_line USING lr_structure CHANGING lv_header.
+  APPEND lv_header TO rt_csv_lines.
+
+  PERFORM create_data_lines USING ir_data CHANGING lt_data_lines.
+  APPEND LINES OF lt_data_lines TO rt_csv_lines.
+ENDFORM.
+
+FORM create_header_line USING ir_structure TYPE REF TO data
+                        CHANGING rv_header TYPE string.
+
+  DATA: lv_line         TYPE string,
+        lv_first        TYPE abap_bool VALUE abap_true,
+        lv_display_name TYPE string,
+        lr_struct_descr TYPE REF TO cl_abap_structdescr,
+        lt_components   TYPE cl_abap_structdescr=>component_table.
+  FIELD-SYMBOLS: <ls_structure> TYPE any.
+
+  ASSIGN ir_structure->* TO <ls_structure>.
+
+  lr_struct_descr ?= cl_abap_typedescr=>describe_by_data( <ls_structure> ).
+  lt_components = lr_struct_descr->get_components( ).
+
+  LOOP AT lt_components INTO DATA(ls_component).
+    IF lv_first = abap_false.
+      lv_line = |{ lv_line },|.
+    ENDIF.
+
+    IF to_upper( ls_component-name ) = 'FISCALYEAR'.
+      lv_display_name = 'Fiscal Year'.
+*    ELSE.
+*      lv_display_name = ls_component-name.
+    ENDIF.
+
+    IF to_upper( ls_component-name ) = 'COMPANYCODE'.   lv_display_name = 'Company Code'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ACCOUNTINGDOCUMENTNUMBER'.   lv_display_name = 'Accounting Document Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ACCOUNTINGDOCUMENTITEM'.   lv_display_name = 'Accounting Document Number Item'. ENDIF.
+    IF to_upper( ls_component-name ) = 'BILLINGDOCUMENTNUMBER'.   lv_display_name = 'Billing Document Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'FISCALPERIOD'.   lv_display_name = 'Fiscal Period'. ENDIF.
+    IF to_upper( ls_component-name ) = 'POSTINGDATE'.   lv_display_name = 'Date Range'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CLEARINGSTATUS'.   lv_display_name = 'Clearing Status'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PROFITCENTER'.   lv_display_name = 'ProfitCenter'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PROFITCENTERDESC'.   lv_display_name = 'Profit Center Desc'. ENDIF.
+    IF to_upper( ls_component-name ) = 'LINEOFBUSINESS'.   lv_display_name = 'Line Of Business'. ENDIF.
+    IF to_upper( ls_component-name ) = 'LINEOFBUSINESSDESC'.   lv_display_name = 'Line Of Business Desc'. ENDIF.
+    IF to_upper( ls_component-name ) = 'BUSINESSAREA'.   lv_display_name = 'Business Area'. ENDIF.
+    IF to_upper( ls_component-name ) = 'BUSINESSAREADESC'.   lv_display_name = 'Business Area Desc'. ENDIF.
+    IF to_upper( ls_component-name ) = 'MARKETSEGMENTS'.   lv_display_name = 'Market Segments'. ENDIF.
+    IF to_upper( ls_component-name ) = 'SUBMARKET'.   lv_display_name = 'Submarket'. ENDIF.
+    IF to_upper( ls_component-name ) = 'SUBMARKETDESC'.   lv_display_name = 'Submarket Desc'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PORTFOLIO'.   lv_display_name = 'Portfolio'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PORTFOLIONAME'.   lv_display_name = 'Portfolio Name'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CUSTOMERSOLDTO'.   lv_display_name = 'Customer Sold To Account'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PAYER'.   lv_display_name = 'Customer/Payer'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PAYERNAME'.   lv_display_name = 'Customer/Payer'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PAYMENTTERMS'.   lv_display_name = 'Payment Terms'. ENDIF.
+    IF to_upper( ls_component-name ) = 'OPERATIONALCONTRACTNUMBER'.   lv_display_name = 'Operational Contract Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CUSTOMERCONTRACTNUMBER'.   lv_display_name = 'Customer Contract Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DELIVERYORDER'.   lv_display_name = 'Delivery Order'. ENDIF.
+    IF to_upper( ls_component-name ) = 'VOUCHERNUMBER'.   lv_display_name = 'Voucher Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ACCOUNTINGDOCITEM'.   lv_display_name = 'Accounting Document Item'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DOCUMENTDATE'.   lv_display_name = 'Document Date'. ENDIF.
+    IF to_upper( ls_component-name ) = 'BASELINEDATE'.   lv_display_name = 'Baseline Date'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ORIGINALDOCUMENTNUMBER'.   lv_display_name = 'Original Document Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ORIGINALAMOUNT'.   lv_display_name = 'Original Amount'. ENDIF.
+    IF to_upper( ls_component-name ) = 'TRANSACTIONCURRENCY'.   lv_display_name = 'Transaction Currency'. ENDIF.
+    IF to_upper( ls_component-name ) = 'OPENAMTINDOCCURR'.   lv_display_name = 'Open Amount in Document Currency'. ENDIF.
+    IF to_upper( ls_component-name ) = 'SHIPMENTNO'.   lv_display_name = 'Shipment Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'MYINVOICESTATUSHISTORY'.   lv_display_name = 'MyInvoice Status History'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CLEARINGDOCUMENT'.   lv_display_name = 'Clearing Document'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CLEARINGDATE'.   lv_display_name = 'Clearing Date'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DOCUMENTTYPE'.   lv_display_name = 'Document Type'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DOCUMENTHEADERTEXT'.   lv_display_name = 'Document Header Text'. ENDIF.
+    IF to_upper( ls_component-name ) = 'COLLECTIONSPECILIST'.   lv_display_name = 'Collection Specialist'. ENDIF.
+    IF to_upper( ls_component-name ) = 'COLLECTIONCOMMENTS'.   lv_display_name = 'CollectionComments'. ENDIF.
+    IF to_upper( ls_component-name ) = 'COLLECTIONCOMMENTS2'.   lv_display_name = 'Collection Specialist Comments Addl'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CHARTOFACCOUNTS'.   lv_display_name = 'Chart Of Accounts'. ENDIF.
+    IF to_upper( ls_component-name ) = 'AMOUNTINLOCALCURRENCY'.   lv_display_name = 'Amount In Local Currency'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ASSIGNMENT'.   lv_display_name = 'Assignment'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WBSELEMENT'.   lv_display_name = 'WBSElement'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WBSELEMENTDESC'.   lv_display_name = 'WBSElement Desc'. ENDIF.
+    IF to_upper( ls_component-name ) = 'TEXT'.   lv_display_name = 'Text'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DAYSINARREARS'.   lv_display_name = 'Days in Arrears'. ENDIF.
+    IF to_upper( ls_component-name ) = 'GLACCOUNT'.   lv_display_name = 'GLAccount'. ENDIF.
+    IF to_upper( ls_component-name ) = 'REFERENCE'.   lv_display_name = 'Reference'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CONVERSIONINVOICENUMBER'.   lv_display_name = 'Conversion Invoice Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'COLLECTIONSEGMENT'.   lv_display_name = 'Collection Segment'. ENDIF.
+    IF to_upper( ls_component-name ) = 'REFERENCE1'.   lv_display_name = 'Reference1'. ENDIF.
+    IF to_upper( ls_component-name ) = 'REFERENCE2'.   lv_display_name = 'Reference2'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DOCUMENTREFERENCEID'.   lv_display_name = 'Document Reference'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFDOCUMENTTYPE'.   lv_display_name = 'WAWF Document Type'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFSTATUS'.   lv_display_name = 'WAWF Status'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFACCEPTANCEDATE'.   lv_display_name = 'WAWF Acceptance Date'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFPROCESSEDDATE'.   lv_display_name = 'WAWF Processed Date'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFREJECTREASON'.   lv_display_name = 'WAWF Reject Reason'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFCONTRACTNUMBER'.   lv_display_name = 'WAWF Contract Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFDELIVERYORDER'.   lv_display_name = 'WAWF Delivery Order'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFBILLINGDOCNUMBER'.   lv_display_name = 'WAWF Billing Doc Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFINVOICENUMBER'.   lv_display_name = 'WAWF Invoice Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFSHIPMENTNUMBER'.   lv_display_name = 'WAWF Shipment Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFVOUCHERNUMBER'.   lv_display_name = 'WAWF Voucher Number'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFNOTIFURN'.   lv_display_name = 'WAWFNOTIFURN'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFINVOICEDT'.   lv_display_name = 'WAWFINVOICEDT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'COSTVOUCHERDT'.   lv_display_name = 'COSTVOUCHERDT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFSHIPMENTDT'.   lv_display_name = 'WAWFSHIPMENTDT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'VENDORNAME'.   lv_display_name = 'VENDORNAME'. ENDIF.
+    IF to_upper( ls_component-name ) = 'VENDORCAGE'.   lv_display_name = 'VENDORCAGE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PBPREQUESTNBR'.   lv_display_name = 'PBPREQUESTNBR'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PBPREQUESTDT'.   lv_display_name = 'PBPREQUESTDT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'RECEIPTDT'.   lv_display_name = 'RECEIPTDT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'IMPORTDT'.   lv_display_name = 'IMPORTDT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ACTIONROLE'.   lv_display_name = 'ACTIONROLE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ACTIONDT'.   lv_display_name = 'ACTIONDT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFMESSAGES'.   lv_display_name = 'WAWFMESSAGES'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CREATEDDATE'.   lv_display_name = 'CREATEDDATE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CREATEDTIME'.   lv_display_name = 'CREATEDTIME'. ENDIF.
+    IF to_upper( ls_component-name ) = 'TRXSETPURPOSE'.   lv_display_name = 'TRXSETPURPOSE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'WAWFFILENAME'.   lv_display_name = 'WAWFFILENAME'. ENDIF.
+    IF to_upper( ls_component-name ) = 'BRANCHACCOUNT'.   lv_display_name = 'BRANCHACCOUNT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DUNNINGLEVEL'.   lv_display_name = 'DUNNINGLEVEL'. ENDIF.
+    IF to_upper( ls_component-name ) = 'LASTDUNNINGDATE'.   lv_display_name = 'LASTDUNNINGDATE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'NETDUEDATE'.   lv_display_name = 'NETDUEDATE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'REFERENCE1INDOCUMENTHEADER'.   lv_display_name = 'REFERENCE1INDOCUMENTHEADER'. ENDIF.
+    IF to_upper( ls_component-name ) = 'REFERENCE2INDOCUMENTHEADER'.   lv_display_name = 'REFERENCE2INDOCUMENTHEADER'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PAYMENTMETHOD'.   lv_display_name = 'PAYMENTMETHOD'. ENDIF.
+    IF to_upper( ls_component-name ) = 'FINANCIALACCOUNTTYPE'.   lv_display_name = 'FINANCIALACCOUNTTYPE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CASHDISCOUNT1DAYS'.   lv_display_name = 'CASHDISCOUNT1DAYS'. ENDIF.
+    IF to_upper( ls_component-name ) = 'AMOUNTINTRANSACTIONCURRENCY'.   lv_display_name = 'AMOUNTINTRANSACTIONCURRENCY'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PAIDAMOUNT'.   lv_display_name = 'PAIDAMOUNT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DUNNEDAMOUNT'.   lv_display_name = 'DUNNEDAMOUNT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'OPENAMOUNTINDOCUMENTCURRENCY'.   lv_display_name = 'OPENAMOUNTINDOCUMENTCURRENCY'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CASHDISCOUNTAMTINTRANSACCRCY'.   lv_display_name = 'CASHDISCOUNTAMTINTRANSACCRCY'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PAYMENTDATE'.   lv_display_name = 'PAYMENTDATE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DUNNINGBLOCKINGREASON'.   lv_display_name = 'DUNNINGBLOCKINGREASON'. ENDIF.
+    IF to_upper( ls_component-name ) = 'SPECIALGLCODE'.   lv_display_name = 'SPECIALGLCODE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'OPERATIONALGLACCOUNT'.   lv_display_name = 'OPERATIONALGLACCOUNT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'BILLINGDOCUMENT'.   lv_display_name = 'BILLINGDOCUMENT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'POSTINGKEY'.   lv_display_name = 'POSTINGKEY'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DOCUMENTITEMTEXT'.   lv_display_name = 'DOCUMENTITEMTEXT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'REFERENCEDOCUMENTLOGICALSYSTEM'.   lv_display_name = 'REFERENCEDOCUMENTLOGICALSYSTEM'. ENDIF.
+    IF to_upper( ls_component-name ) = 'LASTDUNNINGDURATIONINDAYS'.   lv_display_name = 'LASTDUNNINGDURATIONINDAYS'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CASESTATUS'.   lv_display_name = 'CASESTATUS'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CASESTATUSNAME'.   lv_display_name = 'CASESTATUSNAME'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CASEREASON'.   lv_display_name = 'CASEREASON'. ENDIF.
+    IF to_upper( ls_component-name ) = 'REASONCODENAME'.   lv_display_name = 'REASONCODENAME'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PROMISETOPAYSTATUS'.   lv_display_name = 'PROMISETOPAYSTATUS'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DISPUTECASE'.   lv_display_name = 'DISPUTECASE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PROMISETOPAY'.   lv_display_name = 'PROMISETOPAY'. ENDIF.
+    IF to_upper( ls_component-name ) = 'NUMBEROFRESUBMISSIONS'.   lv_display_name = 'NUMBEROFRESUBMISSIONS'. ENDIF.
+    IF to_upper( ls_component-name ) = 'NUMBEROFDAYSSINCERESUBMISSION'.   lv_display_name = 'NUMBEROFDAYSSINCERESUBMISSION'. ENDIF.
+    IF to_upper( ls_component-name ) = 'ARRANGEDAMOUNT'.   lv_display_name = 'ARRANGEDAMOUNT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PROMISEDAMOUNT'.   lv_display_name = 'PROMISEDAMOUNT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PROMISETOPAYLEVEL'.   lv_display_name = 'PROMISETOPAYLEVEL'. ENDIF.
+    IF to_upper( ls_component-name ) = 'PROMISETOPAYDUEDATE'.   lv_display_name = 'PROMISETOPAYDUEDATE'. ENDIF.
+    IF to_upper( ls_component-name ) = 'DISPUTEDAMOUNT'.   lv_display_name = 'DISPUTEDAMOUNT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'CREDITEDAMOUNT'.   lv_display_name = 'CREDITEDAMOUNT'. ENDIF.
+    IF to_upper( ls_component-name ) = 'OBJECTKEY'.   lv_display_name = 'OBJECTKEY'. ENDIF.
+    IF to_upper( ls_component-name ) = 'COUNTRY'.   lv_display_name = 'COUNTRY'. ENDIF.
+
+
+
+    lv_line = |{ lv_line }{ lv_display_name }|.
+    lv_first = abap_false.
+  ENDLOOP.
+
+  rv_header = lv_line.
+ENDFORM.
+
+FORM create_data_lines USING ir_data TYPE REF TO data
+                       CHANGING rt_lines TYPE tt_string.
+
+  FIELD-SYMBOLS: <lt_data> TYPE STANDARD TABLE,
+                 <ls_data> TYPE any.
+
+  DATA: lr_structure TYPE REF TO data,
+        lv_line      TYPE string.
+
+  ASSIGN ir_data->* TO <lt_data>.
+
+  LOOP AT <lt_data> ASSIGNING <ls_data>.
+    GET REFERENCE OF <ls_data> INTO lr_structure.
+    PERFORM structure_to_csv_line USING lr_structure CHANGING lv_line.
+    APPEND lv_line TO rt_lines.
+  ENDLOOP.
+ENDFORM.
+
+FORM structure_to_csv_line USING ir_structure TYPE REF TO data
+                           CHANGING rv_line TYPE string.
+
+  DATA: lv_line  TYPE string,
+        lv_first TYPE abap_bool VALUE abap_true,
+        lv_value TYPE string,
+        lv_clean TYPE string.
+  FIELD-SYMBOLS: <ls_structure> TYPE any,
+                 <lv_field>     TYPE any.
+
+  ASSIGN ir_structure->* TO <ls_structure>.
+
+  DO.
+    ASSIGN COMPONENT sy-index OF STRUCTURE <ls_structure> TO <lv_field>.
+    IF sy-subrc <> 0.
+      EXIT.
+    ENDIF.
+
+    lv_value = |{ <lv_field> }|.
+    PERFORM clean_field_value USING lv_value CHANGING lv_clean.
+
+    IF lv_first = abap_false.
+      lv_line = |{ lv_line },|.
+    ENDIF.
+
+    lv_line = |{ lv_line }{ lv_clean }|.
+    lv_first = abap_false.
+  ENDDO.
+
+  rv_line = lv_line.
+ENDFORM.
+
+FORM clean_field_value USING iv_value TYPE string
+                       CHANGING rv_clean TYPE string.
+  rv_clean = iv_value.
+
+  rv_clean = replace( val = rv_clean sub = ';' with = ',' occ = 0 ).
+  rv_clean = replace( val = rv_clean sub = '"' with = '''' occ = 0 ).
+  rv_clean = replace( val = rv_clean sub = cl_abap_char_utilities=>cr_lf with = ' ' occ = 0 ).
+  rv_clean = replace( val = rv_clean sub = cl_abap_char_utilities=>newline with = ' ' occ = 0 ).
+  rv_clean = replace( val = rv_clean sub = cl_abap_char_utilities=>horizontal_tab with = ' ' occ = 0 ).
+
+  IF rv_clean CS ',' OR rv_clean CS ' '.
+*    rv_clean = |"{ rv_clean }"|.
+  ENDIF.
+ENDFORM.
+
+
+FORM export_csv USING it_csv_lines TYPE tt_string
+                      iv_path TYPE string
+                      iv_prefix TYPE string
+                CHANGING rs_result TYPE ty_export_result.
+
+  DATA: lv_filename      TYPE string,
+        lv_physical_path TYPE string.
+
+  PERFORM generate_filename USING iv_prefix CHANGING lv_filename.
+  PERFORM resolve_physical_path USING iv_path lv_filename CHANGING lv_physical_path.
+  PERFORM write_file USING it_csv_lines lv_physical_path CHANGING rs_result.
+
+  rs_result-filepath = lv_physical_path.
+ENDFORM.
+
+FORM generate_filename USING iv_prefix TYPE string
+                       CHANGING rv_filename TYPE string.
+  DATA(lv_timestamp) = |{ sy-datum }{ sy-uzeit }|.
+  rv_filename = |{ iv_prefix }.csv|.
+ENDFORM.
+
+FORM resolve_physical_path USING iv_logical_path TYPE string
+                                 iv_filename TYPE string
+                           CHANGING rv_physical_path TYPE string.
+
+  DATA : lv_tvravc_name TYPE rvari_vnam.
+
+  REPLACE ALL OCCURRENCES OF '$SYS$'  IN iv_logical_path WITH sy-sysid.
+  CONDENSE iv_logical_path.
+*  SELECT SINGLE
+*         low
+*    FROM tvarvc
+*    INTO @DATA(lv_file_path)
+*   WHERE name = @lv_tvravc_name.
+
+*  CALL FUNCTION 'FILE_GET_NAME'
+*    EXPORTING
+*      logical_filename = CONV fileintern( iv_logical_path )
+**     file_name        = iv_filename
+*      parameter_1      = sy-sysid
+*    IMPORTING
+*      file_name        = rv_physical_path
+*    EXCEPTIONS
+*      file_not_found   = 1
+*      OTHERS           = 2.
+*
+*  IF sy-subrc <> 0.
+  rv_physical_path = |{ iv_logical_path }/{ iv_filename }|.
+* ENDIF.
+ENDFORM.
+
+FORM write_file USING it_lines TYPE tt_string
+                      iv_filepath TYPE string
+                CHANGING rs_result TYPE ty_export_result.
+
+  rs_result-record_count = lines( it_lines ) - 1.
+
+  TRY.
+
+      OPEN DATASET iv_filepath FOR INPUT IN TEXT MODE ENCODING UTF-8.
+      IF sy-subrc = 0.
+        CLOSE DATASET iv_filepath.
+
+        DELETE DATASET iv_filepath.
+        IF sy-subrc = 0.
+        ENDIF.
+      ENDIF.
+
+      OPEN DATASET iv_filepath FOR INPUT IN TEXT MODE ENCODING UTF-8.
+
+      IF sy-subrc <> 0.
+
+        OPEN DATASET iv_filepath FOR OUTPUT IN TEXT MODE ENCODING DEFAULT.
+
+        LOOP AT it_lines INTO DATA(lv_line).
+          TRANSFER lv_line TO iv_filepath.
+        ENDLOOP.
+
+        CLOSE DATASET iv_filepath.
+
+        rs_result-success = abap_true.
+        rs_result-message = |File exported successfully: { iv_filepath }|.
+
+      ENDIF.
+
+    CATCH cx_sy_file_open_mode.
+      rs_result-success = abap_false.
+      rs_result-message = |Error opening file: { iv_filepath }|.
+
+    CATCH cx_sy_codepage_converter_init.
+      rs_result-success = abap_false.
+      rs_result-message = |Encoding error: { iv_filepath }|.
+
+    CATCH cx_sy_conversion_codepage.
+      rs_result-success = abap_false.
+      rs_result-message = |Character conversion error: { iv_filepath }|.
+
+    CATCH cx_sy_file_authority.
+      rs_result-success = abap_false.
+      rs_result-message = |No authorization for file: { iv_filepath }|.
+
+    CATCH cx_root INTO DATA(lx_error).
+      rs_result-success = abap_false.
+      rs_result-message = |Unexpected error: { lx_error->get_text( ) }|.
+  ENDTRY.
+
+ENDFORM.
+
+
+FORM process_invoice_export USING iv_clearing_date TYPE dats
+                                  iv_is_open_mode TYPE abap_bool
+                                  iv_days TYPE i
+                                  iv_export_path TYPE string
+                            CHANGING rs_result TYPE ty_export_result.
+
+  DATA: lv_valid      TYPE abap_bool,
+        ls_config     TYPE ty_processing_config,
+        lr_date_range TYPE ty_date_range,
+        lr_data       TYPE REF TO data,
+        lt_csv_lines  TYPE tt_string.
+
+  PERFORM validate_inputs USING iv_clearing_date iv_is_open_mode iv_days iv_export_path
+                          CHANGING lv_valid.
+
+  IF lv_valid = abap_false.
+    rs_result-success = abap_false.
+    rs_result-message = 'Input validation failed'.
+    RETURN.
+  ENDIF.
+
+  IF iv_is_open_mode = abap_true.
+    PERFORM build_open_items_config USING iv_clearing_date CHANGING ls_config.
+  ELSE.
+    PERFORM build_cleared_items_config USING iv_clearing_date iv_days CHANGING ls_config.
+  ENDIF.
+
+  PERFORM calculate_range USING iv_clearing_date ls_config-days CHANGING lr_date_range.
+  PERFORM get_data_by_mode USING ls_config lr_date_range CHANGING lr_data.
+  PERFORM transform_to_csv USING lr_data CHANGING lt_csv_lines.
+  PERFORM export_csv USING lt_csv_lines iv_export_path ls_config-file_prefix CHANGING rs_result.
+ENDFORM.
+
+FORM validate_inputs USING iv_clearing_date TYPE dats
+                            iv_is_open_mode TYPE abap_bool
+                            iv_days TYPE i
+                            iv_export_path TYPE string
+                     CHANGING rv_valid TYPE abap_bool.
+
+  rv_valid = COND #(
+    WHEN iv_clearing_date IS INITIAL THEN abap_false
+    WHEN iv_export_path IS INITIAL THEN abap_false
+    WHEN iv_is_open_mode = abap_false AND iv_days IS INITIAL THEN abap_false
+    ELSE abap_true
+  ).
+ENDFORM.
+FORM fetch_collection_comments CHANGING rr_data TYPE REF TO data.
+
+  DATA : wa_note(262143)  TYPE c,
+         wa_note1(262143) TYPE c,
+         wa_note2(262143) TYPE c,
+         wa_date(20)      TYPE c.
+  CONSTANTS : c(1) VALUE '/'.
+  FIELD-SYMBOLS : <lt_ar_Data>  TYPE STANDARD TABLE,
+                  <Lfs_AR_DATA> TYPE  zc_sd_inv_open_clr_item_exp.
+
+
+  ASSIGN rr_data->* TO <lt_ar_Data>.
+  LOOP AT <lt_ar_Data> ASSIGNING <Lfs_AR_DATA>.
+    DATA(lt_notes) = cl_coll_pr_invoice_factory=>get_instance( )->get_invoice_controller(
+           EXPORTING
+             is_key                = VALUE #( companycode = <Lfs_AR_DATA>-companycode
+                                              accountingdocument  = <Lfs_AR_DATA>-accountingdocumentnumber
+                                              fiscalyear  = <Lfs_AR_DATA>-fiscalyear
+                                              accountingdocumentitem = <Lfs_AR_DATA>-AccountingDocumentItem ) )->get_notes(  ).                 " Invoice Key
+
+    IF lt_notes IS NOT INITIAL.
+      SORT lt_notes DESCENDING BY created_ts.
+
+      LOOP AT lt_notes ASSIGNING FIELD-SYMBOL(<fs_notes>).
+        CLEAR : wa_date,wa_note1.
+        CONCATENATE      <fs_notes>-created_on+4(2) <fs_notes>-created_on+6(2) <fs_notes>-created_on+2(2) INTO wa_date SEPARATED BY c.
+        SHIFT wa_date LEFT DELETING LEADING space.
+        TRANSLATE wa_date TO LOWER  CASE.
+        TRANSLATE wa_date+0(1) TO UPPER CASE.
+        CONCATENATE   wa_date   <fs_notes>-note     INTO wa_note1 SEPARATED BY ' - '.
+
+        CONDENSE wa_note1.
+
+        IF ( strlen( wa_note ) + strlen( wa_note1 ) ) LE 1300 AND  wa_note2 IS INITIAL.
+          CONCATENATE  wa_note wa_note1     INTO wa_note SEPARATED BY ';  '.
+        ELSE.
+          CONCATENATE   wa_note2  wa_note1   INTO wa_note2 SEPARATED BY ';  '.
+        ENDIF.
+
+      ENDLOOP.
+    ENDIF.
+    CLEAR lt_notes.
+    SHIFT wa_note LEFT DELETING LEADING  ';  '.
+    SHIFT wa_note2 LEFT DELETING LEADING  ';  '.
+
+    <Lfs_AR_DATA>-CollectionComments = wa_note.
+    <Lfs_AR_DATA>-CollectionComments2 = wa_note2.
+  ENDLOOP.
+ENDFORM.
+
+FORM get_data_by_mode USING is_config TYPE ty_processing_config
+                            is_date_range TYPE ty_date_range
+                      CHANGING rr_data TYPE REF TO data.
+
+  IF is_config-mode = 'OPEN'.
+    PERFORM fetch_open_items USING is_date_range CHANGING rr_data.
+  ELSE.
+    PERFORM fetch_cleared_items USING is_date_range CHANGING rr_data.
+  ENDIF.
+
+
+  PERFORM fetch_collection_comments CHANGING rr_data.
+ENDFORM.
+
+FORM modify_screen_fields.
+  LOOP AT SCREEN.
+    CASE screen-group1.
+      WHEN 'DY2'.
+        screen-active = COND #( WHEN r_open = 'X' THEN 0 ELSE 1 ).
+        MODIFY SCREEN.
+    ENDCASE.
+  ENDLOOP.
+ENDFORM.
+
+FORM display_result USING is_result TYPE ty_export_result.
+  IF is_result-success = abap_true.
+    WRITE: / 'SUCCESS:', is_result-message.
+    WRITE: / 'Records exported:', is_result-record_count.
+    MESSAGE 'Export completed' TYPE 'S'.
+  ELSE.
+    WRITE: / 'ERROR:', is_result-message.
+    MESSAGE 'Export failed:' TYPE 'E'.
+  ENDIF.
+ENDFORM.
+
+
+AT SELECTION-SCREEN OUTPUT.
+  PERFORM modify_screen_fields.
+
+START-OF-SELECTION.
+  DATA: ls_result TYPE ty_export_result.
+
+  PERFORM process_invoice_export USING p_clrdt r_open p_days p_path
+                                 CHANGING ls_result.
+
+  PERFORM display_result USING ls_result.
