@@ -1,0 +1,100 @@
+@EndUserText.label: 'Net Investment Report'
+@ClientHandling.type: #CLIENT_DEPENDENT
+@ClientHandling.algorithm: #SESSION_VARIABLE
+define table function ZTF_FI_NET_INVESTMENT
+   with parameters
+         @Environment.systemField: #CLIENT    p_client      : abap.clnt ,
+                                              p_where_rpsco : abap.string,
+                                              p_where_acdoca: abap.string,
+                                              p_where_cost  : abap.string,
+                                              p_where_revenue: abap.string,
+                                              p_lednr       : bp_lednr,
+                                              p_currtype    : char1,
+                                              p_fryyyy      : char4,
+                                              p_frmmm       : char3,
+                                              p_toyyyy      : char4,
+                                              p_tommm       : char3
+                                             
+returns
+{
+         CLIENT       : mandt;
+         prj          : ps_pspid;
+
+         wbs          : ps_posid;
+         wbspost1     : ps_post1;
+         usr00        : zz1_asc606_psr;
+         rev          : bp_wpl;          yrev     : bp_wpl;       irev     : bp_wpl;       
+         unb          : bp_wpl;          yunb     : bp_wpl;       iunb     : bp_wpl; 
+         rsu          : bp_wpl;          yrsu     : bp_wpl;       irsu     : bp_wpl; 
+         cos          : bp_wpl;          ycos     : bp_wpl;       icos     : bp_wpl; 
+         prf          : bp_wpl;          yprf     : bp_wpl;       iprf     : bp_wpl;      // Profit- was mtd, ytd, itd
+         wip          : bp_wpl;          ywip     : bp_wpl;       iwip     : bp_wpl; 
+         res          : bp_wpl;          yres     : bp_wpl;       ires     : bp_wpl; 
+         ril          : bp_wpl;          yril     : bp_wpl;       iril     : bp_wpl; 
+
+         acc          : bp_wpl;          yacc     : bp_wpl;       iacc     : bp_wpl;      //act cost 
+         acr          : bp_wpl;          yacr     : bp_wpl;       iacr     : bp_wpl;      //act revenue 
+         apf          : bp_wpl;          yapf     : bp_wpl;       iapf     : bp_wpl;      //act profit
+         app          : bp_wpl;          yapp     : bp_wpl;       iapp     : bp_wpl;      //act profit %
+         arp          : bp_wpl;          yarp     : bp_wpl;       iarp     : bp_wpl;      //act ros %
+         aca          : bp_wpl;          yaca     : bp_wpl;       iaca     : bp_wpl;  
+         acg          : bp_wpl;          yacg     : bp_wpl;       iacg     : bp_wpl;   
+         acp          : bp_wpl;          yacp     : bp_wpl;       iacp     : bp_wpl;  
+         
+         ar           : bp_wpl;            yar    : bp_wpl;         iar    : bp_wpl;
+         cust_conno   : char255;       delv_ordno : char255 ; prime_conno  : char255 ;
+         ota          : bp_wpl;           yota    : bp_wpl;        iota    : bp_wpl;  
+// 30-Jan-2026 Rao A; Instead of single value, split POB values to cm, ytd and itd         
+//         orders_tot   : bp_wpl;  
+//         backlog_tot  : bp_wpl;
+         orders       : bp_wpl;          yorders  : bp_wpl;       iorders  : bp_wpl; 
+         backlog      : bp_wpl;          ybacklog : bp_wpl;       ibacklog : bp_wpl; 
+         rev_tl       : bp_wpl;          yrev_tl  : bp_wpl;       irev_tl  : bp_wpl;
+         cos_tl       : bp_wpl;          ycos_tl  : bp_wpl;       icos_tl  : bp_wpl;
+         unb_tl       : bp_wpl;          yunb_tl  : bp_wpl;       iunb_tl  : bp_wpl;
+         sur_tl       : bp_wpl;          ysur_tl  : bp_wpl;       isur_tl  : bp_wpl;                          
+         wip_tl       : bp_wpl;          ywip_tl  : bp_wpl;       iwip_tl  : bp_wpl;   
+         unr_tl       : bp_wpl;          yunr_tl  : bp_wpl;       iunr_tl  : bp_wpl;   
+         los_tl       : bp_wpl;          ylos_tl  : bp_wpl;       ilos_tl  : bp_wpl;  
+         adv_tl       : bp_wpl;          yadv_tl  : bp_wpl;       iadv_tl  : bp_wpl;                          
+         prg_tl       : bp_wpl;          yprg_tl  : bp_wpl;       iprg_tl  : bp_wpl;   
+         prf_tl       : bp_wpl;          yprf_tl  : bp_wpl;       iprf_tl  : bp_wpl;   
+         ar_tl        : bp_wpl;           yar_tl  : bp_wpl;        iar_tl  : bp_wpl;             
+
+                    
+// Next 5 fields are inception-to-date fields, no current month, no year-to-date  , renamed... added i infront       
+         iplr         : bp_wpl;          iplc     : bp_wpl;       iplp     : bp_wpl;      // plan rev, plan cost, plan profit
+         iprm         : vlc_amount;      iros     : vlc_amount;                           // prof margin
+        
+         ra           : abgr_schl; 
+         typ          : ps_prart;
+         tdesc        : ps_pratx; 
+         prctr        : prctr; 
+         pwpos        : ps_pwpos; 
+         pdesc        : ktext; 
+         pgrp         : phinr; 
+         pgdesc       : settext; 
+         ba           : phinr; 
+         badesc       : settext; 
+         lob          : phinr; 
+         lobdesc      : settext; 
+//        primcontno   :  proj-zz_primcontno; 
+//        bstnk        :  proj-zz_bstnk; 
+//        trans_arrange :  proj-zz_trans_arrange; 
+         pbukr        : ps_pbukr; 
+         pspnr        : ps_posnr; 
+         buc          : char35; 
+         astna        : ps_astna; 
+         astnr        : ps_astnr; 
+         verna        : ps_verna; 
+         vernr        : ps_vernr; 
+         objnr        : j_objnr; 
+         system_status: char40; 
+         user_status  : char40; 
+         revclass     : char20; 
+
+         objnr_parent : j_objnr; 
+         flag         : xfeld; 
+}
+implemented by method
+  ZCL_FI_NET_INVESTMENT=>get_data;
