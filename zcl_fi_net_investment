@@ -1,0 +1,1166 @@
+CLASS zcl_fi_net_investment DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+
+    INTERFACES if_amdp_marker_hdb.
+
+    CLASS-METHODS get_data
+        FOR TABLE FUNCTION ztf_fi_net_investment.
+
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+CLASS zcl_fi_net_investment IMPLEMENTATION.
+
+  METHOD get_data BY DATABASE FUNCTION FOR HDB
+                     LANGUAGE SQLSCRIPT
+                     OPTIONS READ-ONLY
+                     USING rpsco prps prhi setleaf acdoca jest tj02 tj02t tj04 jsto tj30 tj30t
+                           tcj1t cepct zc_pnet_proj vbak vmpa ZC_FI_CTR_FLOWDOWN
+                           zz1_3f59cc98d08a.
+*--------------------------------------------------------------------------------------------------*
+*  Lockheed Martin Intellectual Property:                                                          *
+*    © 2024 Lockheed Martin Corporation                                                            *
+*--------------------------------------------------------------------------------------------------*
+
+****************************************************************************************************
+*  Method: GET_DATA                                                                                *
+*                                                                                                  *
+*  Technical Specification:                                                                        *
+*                                                                                                  *
+*  Description: AMDP Method to process Net Investment data                                         *
+*                                                                                                  *
+*  Security Profile / Authority Information:  N/A                                                  *
+*                                                                                                  *
+*  Inputs: N/A                                                                                     *
+*                                                                                                  *
+*  Outputs: N/A                                                                                    *
+*                                                                                                  *
+****************************************************************************************************
+*  Changes History:                                                                                *
+*--------------------------------------------------------------------------------------------------*
+* DATE        AUTHOR                TRANSPORT #  DESCR of CHANGE                                   *
+*--------------------------------------------------------------------------------------------------*
+*                                                                                                  *
+* 07/23/2025  Rao Arimilli (N9862F) DS4K955260   Copied from Hana verion of Prior Netting Report   *
+*                                                Add 11x3 new fields for Top-Level adjustments,    *
+*                                                  3 contract fields and AR/OTA fields             *
+*                                                                                                  *
+* 07/28/2025  Rao A                              Exclude ACDOCA blalance carryforward records      *
+*                                                (Period 000)                                      *
+*                                                                                                  *
+* 04-Sep-25   Rao A                 DS4K961974   Sum POB table rows as there may be more than      *
+*                                                  one row for a objnr (defect 8000039162 )        *
+* 22-Sep-25   Rao A  (N9862f)       DS4K963335   Add GS03 Set filters for Act Cost and Act. Revenue*
+*                                                                                                  *
+*                                                                                                  *
+* 25-Sep-25   Rao A (N9862F)        DS4K964006   Change formula for PRF = REV + COS                *
+*                                                                                                  *
+* 30-Jan-26   Rao A (N9862F)        DS4K973417   For POB Orders and backlog, show current month,   *
+*                                                  current year and inception-to-date columns      *
+*                                                  instead of a single column                      *
+*                                                Include only approved orders in the report        *
+*                                                                                                  *
+*--------------------------------------------------------------------------------------------------*
+    declare lv_client number(3);
+    declare lv_datum  date ;
+    declare lv_time   time;
+    declare lv_spras  char ( 2 ) ;
+    declare lv_user   char ( 12 ) ;
+
+    declare lv_count  bigint;
+    declare lv_inx    bigint;
+    declare lv_loop   int;
+    declare lv_pbukr  char( 4 );
+    declare lv_gbp    nvarchar( 1 ) default '';
+
+    declare p_fryyyymmm nvarchar( 7 );
+    declare p_toyyyymmm nvarchar( 7 );
+    declare lv_amount    decimal( 15, 2 ) ;
+    declare lv_amtcm     decimal( 15, 2 ) ;
+    declare lv_amtytd    decimal( 15, 2 ) ;
+    declare lv_amtitd    decimal( 15, 2 ) ;
+    declare lv_currency  char( 3 );
+    declare lv_racct    nvarchar( 10 ) ;
+
+    declare lv_tomm   nvarchar( 2 );
+
+    declare lc_version nvarchar( 3 );
+    declare lc_01 varchar( 2 ) default '01';
+    declare lc_04 varchar( 2 ) default '04';
+    declare lc_32 varchar( 2 ) default '32';   /* results analysis and wip calculation */
+    declare lc_63 varchar( 2 ) default '63';   /* cost of sales with requirement to capitalize - cosr */
+    declare lc_64 varchar( 2 ) default '64';   /* cost of sales with option to capitalize - coso */
+    declare lc_65 varchar( 2 ) default '65';   /* cost of sales with prohibition to capitalize - cosp */
+    declare lc_51 varchar( 2 ) default '51';
+    declare lc_54 varchar( 2 ) default '54';
+    declare lc_68 varchar( 2 ) default '68';
+    declare lc_69 varchar( 2 ) default '69';
+    declare lc_73 varchar( 2 ) default '73';
+    declare lc_75 varchar( 2 ) default '75';
+    declare lc_70 varchar( 2 ) default '70';
+
+    declare lc_c1 varchar( 2 ) default '60';   /* input price variance - priv */
+    declare lc_c2 varchar( 2 ) default '71';   /* exchange rate variance - exrv */
+    declare lc_c3 varchar( 2 ) default '72';   /* ???? not included in domain definition */
+
+    lv_client = session_context( 'CLIENT' );
+    lv_user   = session_context( 'APPLICATIONUSER' ) ;
+    lv_datum  = session_context( 'SAP_SYSTEM_DATE' ) ;
+    lv_time   = session_context( 'SAP_SYSTEM_TIME' ) ;
+    lv_spras  = session_context( 'LOCALE_SAP' ) ;
+
+    p_fryyyymmm = :p_fryyyy  || :p_frmmm;
+    p_toyyyymmm = :p_toyyyy  || :p_tommm;
+
+* Projects PROJ+PRPS
+   lt_proj = SELECT a.pspnr,
+                    a.objnr,
+                    posid,
+                    a.post1,
+                    psphi,
+                    a.abgsl,
+                    belkz,
+                    pwpos,
+                    stufe,
+                    prart,
+                    a.prctr,
+                    pbukr,
+                    a.astna,
+                    a.astnr,
+                    a.verna,
+                    a.vernr,
+                    b.pspnr as proj_pspnr,
+                    b.pspid as proj_pspid,
+                    b.post1 as proj_post1,
+                    b.objnr as proj_objnr,
+                    b.vbukr as proj_vbukr,
+                    b.prctr as proj_prctr,
+*                    b.usr00 as proj_usr00
+                    b.ZZ1_ASC606_PSR_PSD as proj_usr00
+               from prps    as a
+         inner join zc_pnet_proj    as b       /* access control applied */
+                 on a.psphi = b.pspnr
+                and a.mandt = b.mandt
+*                and a.stufe = '2'
+              where
+               a.mandt = :lv_client
+               and a.abgsl <> ''  ;
+*               and stufe <> '1'
+*               and (  abgsl <> '' or belkz = '' )   /* ?? Is this needed ?? */
+*                 and posid in ( 'OT1-0008A', 'OT1-0010A', 'NS1-0002A' )
+*                 and posid in ( ' GCTF22' )
+*                and posid in ( 'D-31023T.P01' )
+*                and posid in ( 'NS1-0002A' )
+*                and posid in ( 'OT1-0008A' )
+*                and posid in ( 'OT1-0010A' )
+
+    lt_proj =  apply_filter( :lt_proj, :p_where_rpsco );
+*    lt_distinct = SELECT DISTINCT objnr FROM :lt_proj ;   /* testing */
+
+* get each project SYSTEM status as multiple rows
+    lt_projsyst = select distinct p.objnr as objnr,
+                         c.txt04 as txt04,
+                         case when ( coalesce(d.linep, '') = '' ) then '99' else d.linep end as linep,
+                         case when ( coalesce(d.statp, '') = '' ) then '99' else d.statp end as statp
+                    from :lt_proj as p
+              inner join jest  as a on p.objnr = a.objnr and a.inact = ' ' and a.mandt = :lv_client
+              inner join tj02  as b ON a.stat  = b.istat and b.nodis = ' '
+              inner join tj02t as c ON a.stat  = c.istat and c.spras = :lv_spras
+         left outer join tj04  as d ON b.istat = d.istat and d.obtyp = 'PRN'
+                order by objnr, linep, statp, txt04;
+
+* string statuses from multiple rows of each project into single field
+    lt_projsyst1 = SELECT objnr, STRING_AGG(txt04, ', ')  AS system_status
+                     FROM :lt_projsyst
+                GROUP  BY objnr;
+
+* get each project USER status as multiple rows
+    lt_projuser = SELECT DISTINCT p.objnr as objnr,
+                         b.stonr,
+                         case when ( coalesce(b.linep, '') = '' ) then '99' else b.linep end as linep,
+                         case when ( coalesce(b.statp, '') = '' ) then '99' else b.statp end as statp,
+                         c.txt04 as txt04
+                    from :lt_proj as p
+              inner join jsto     as j on j.objnr = p.objnr and j.mandt = :lv_client
+              inner join jest     as a ON a.objnr = p.objnr and a.inact = ''  and a.mandt = :lv_client
+              inner join tj30     as b ON b.stsma = j.stsma and b.estat = a.stat and b.mandt = :lv_client
+              inner join tj30t    as c ON c.stsma = b.stsma and c.estat = b.estat and c.spras = :lv_spras and c.mandt = :lv_client
+                order by objnr, stonr, linep desc, statp desc, txt04 desc;
+
+* string statuses from multiple rows of each project into single field
+    lt_projuser1 = SELECT objnr, string_agg(txt04, ', ')  AS user_status
+                     from :lt_projuser
+                 GROUP BY objnr;
+
+    lt_rpsco = SELECT a.objnr, lednr, wrttp, trgkz, gjahr, acpos, vorga, versn, abkat, geber, twaer, perbl, beltp,
+                      wlp00, wlp01, wlp02, wlp03, wlp04, wlp05, wlp06, wlp07, wlp08,
+                             wlp09, wlp10, wlp11, wlp12, wlp13, wlp14, wlp15, wlp16,
+                      cast( 0 as decimal( 15,2 ) ) as wlpsum,
+                      cast( 0 as decimal( 15,2 ) ) as amtcm,
+                      cast( 0 as decimal( 15,2 ) ) as amtytd,
+                      cast( 0 as decimal( 15,2 ) ) as amtitd
+                 from rpsco as a
+           inner join :lt_proj as b
+                   on a.objnr = b.objnr
+                where a.mandt = :lv_client
+                  and a.lednr = '0001'
+                  and (    ( a.gjahr >= :p_fryyyy and gjahr <= :p_toyyyy  and versn = '000' )
+*                        or ( a.gjahr = '0000'                             and versn = 'LMP' ) )
+                        or  versn = 'LMP'  )
+                  AND (    a.wrttp = '01'        /* plan   */
+                        or a.wrttp = '04'        /* actual */
+                        or a.wrttp = '32' ) ;    /* results analysis and wip calculation */
+
+*     lt_distinct = select distinct objnr from :lt_rpsco ;      /* testing */
+
+     if :p_fryyyy <> :p_toyyyy  then
+       lt_yr0000  = select *
+                      from :lt_rpsco
+*                     where gjahr = '0000';
+                     where versn = 'LMP';
+
+       lt_frdata  = select *
+                      from :lt_rpsco
+                     where gjahr = :p_fryyyy;
+
+       for lv_inx in 1..record_count( :lt_frdata )  DO
+         if :p_frmmm > '001' then   lt_frdata.wlp01[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '002' then   lt_frdata.wlp02[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '003' then   lt_frdata.wlp03[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '004' then   lt_frdata.wlp04[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '005' then   lt_frdata.wlp05[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '006' then   lt_frdata.wlp06[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '007' then   lt_frdata.wlp07[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '008' then   lt_frdata.wlp08[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '009' then   lt_frdata.wlp09[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '010' then   lt_frdata.wlp10[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '011' then   lt_frdata.wlp11[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '012' then   lt_frdata.wlp12[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '013' then   lt_frdata.wlp13[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '014' then   lt_frdata.wlp14[ lv_inx ] = 0 ; END IF ;
+         IF :p_frmmm > '015' then   lt_frdata.wlp15[ lv_inx ] = 0 ; END IF ;
+
+         lt_frdata.wlpsum[ lv_inx ] = :lt_frdata.wlp01[ lv_inx ] + :lt_frdata.wlp02[ lv_inx ] + :lt_frdata.wlp03[ lv_inx ]
+                                    + :lt_frdata.wlp04[ lv_inx ] + :lt_frdata.wlp05[ lv_inx ] + :lt_frdata.wlp06[ lv_inx ]
+                                    + :lt_frdata.wlp07[ lv_inx ] + :lt_frdata.wlp08[ lv_inx ] + :lt_frdata.wlp09[ lv_inx ]
+                                    + :lt_frdata.wlp10[ lv_inx ] + :lt_frdata.wlp11[ lv_inx ] + :lt_frdata.wlp12[ lv_inx ]
+                                    + :lt_frdata.wlp13[ lv_inx ] + :lt_frdata.wlp14[ lv_inx ] + :lt_frdata.wlp15[ lv_inx ]
+                                    + :lt_frdata.wlp16[ lv_inx ]   ;
+         lt_frdata.amtitd[ lv_inx ] =  :lt_frdata.wlpsum[ lv_inx ] ;
+        END for;
+
+        lt_middata = SELECT *
+                       FROM :lt_rpsco
+                      WHERE gjahr > :p_fryyyy
+                        AND gjahr < :p_toyyyy;
+        FOR lv_inx in 1..record_count( :lt_middata )  DO
+         lt_middata.wlpsum[ lv_inx ] = :lt_middata.wlp01[ lv_inx ] + :lt_middata.wlp02[ lv_inx ] + :lt_middata.wlp03[ lv_inx ]
+                                     + :lt_middata.wlp04[ lv_inx ] + :lt_middata.wlp05[ lv_inx ] + :lt_middata.wlp06[ lv_inx ]
+                                     + :lt_middata.wlp07[ lv_inx ] + :lt_middata.wlp08[ lv_inx ] + :lt_middata.wlp09[ lv_inx ]
+                                     + :lt_middata.wlp10[ lv_inx ] + :lt_middata.wlp11[ lv_inx ] + :lt_middata.wlp12[ lv_inx ]
+                                     + :lt_middata.wlp13[ lv_inx ] + :lt_middata.wlp14[ lv_inx ] + :lt_middata.wlp15[ lv_inx ]
+                                     + :lt_middata.wlp16[ lv_inx ]   ;
+         lt_middata.amtitd[ lv_inx ] =  :lt_middata.wlpsum[ lv_inx ] ;
+        END for;
+
+       lt_todata  = SELECT *
+                      FROM :lt_rpsco
+                     WHERE gjahr = :p_toyyyy ;
+
+       FOR lv_inx in 1..record_count( :lt_todata )  DO
+         if :p_tommm < '016' then   lt_todata.wlp16[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '015' then   lt_todata.wlp15[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '014' then   lt_todata.wlp14[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '013' then   lt_todata.wlp13[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '012' then   lt_todata.wlp12[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '011' then   lt_todata.wlp11[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '010' then   lt_todata.wlp10[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '009' then   lt_todata.wlp09[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '008' then   lt_todata.wlp08[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '007' then   lt_todata.wlp07[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '006' then   lt_todata.wlp06[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '005' then   lt_todata.wlp05[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '004' then   lt_todata.wlp04[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '003' then   lt_todata.wlp03[ lv_inx ] = 0 ; END IF ;
+         IF :p_tommm < '002' then   lt_todata.wlp02[ lv_inx ] = 0 ; END IF ;
+
+         lt_todata.wlpsum[ lv_inx ] = :lt_todata.wlp01[ lv_inx ] + :lt_todata.wlp02[ lv_inx ] + :lt_todata.wlp03[ lv_inx ]
+                                    + :lt_todata.wlp04[ lv_inx ] + :lt_todata.wlp05[ lv_inx ] + :lt_todata.wlp06[ lv_inx ]
+                                    + :lt_todata.wlp07[ lv_inx ] + :lt_todata.wlp08[ lv_inx ] + :lt_todata.wlp09[ lv_inx ]
+                                    + :lt_todata.wlp10[ lv_inx ] + :lt_todata.wlp11[ lv_inx ] + :lt_todata.wlp12[ lv_inx ]
+                                    + :lt_todata.wlp13[ lv_inx ] + :lt_todata.wlp14[ lv_inx ] + :lt_todata.wlp15[ lv_inx ]
+                                    + :lt_todata.wlp16[ lv_inx ]   ;
+         lt_todata.amtitd[ lv_inx ] =  :lt_todata.wlpsum[ lv_inx ] ;
+         lt_todata.amtytd[ lv_inx ] =  :lt_todata.wlpsum[ lv_inx ] ;
+
+         IF :p_tommm = '001' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp01[ lv_inx ] ; END IF ;
+         IF :p_tommm = '002' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp02[ lv_inx ] ; END IF ;
+         IF :p_tommm = '003' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp03[ lv_inx ] ; END IF ;
+         IF :p_tommm = '004' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp04[ lv_inx ] ; END IF ;
+         IF :p_tommm = '005' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp05[ lv_inx ] ; END IF ;
+         IF :p_tommm = '006' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp06[ lv_inx ] ; END IF ;
+         IF :p_tommm = '007' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp07[ lv_inx ] ; END IF ;
+         IF :p_tommm = '008' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp08[ lv_inx ] ; END IF ;
+         IF :p_tommm = '009' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp09[ lv_inx ] ; END IF ;
+         IF :p_tommm = '010' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp10[ lv_inx ] ; END IF ;
+         IF :p_tommm = '011' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp11[ lv_inx ] ; END IF ;
+         IF :p_tommm = '012' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp12[ lv_inx ] ; END IF ;
+         IF :p_tommm = '013' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp13[ lv_inx ] ; END IF ;
+         IF :p_tommm = '014' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp14[ lv_inx ] ; END IF ;
+         IF :p_tommm = '015' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp15[ lv_inx ] ; END IF ;
+         IF :p_tommm = '016' then   lt_todata.amtcm[ lv_inx ] = :lt_todata.wlp16[ lv_inx ] ; END IF ;
+        END for;
+
+     ELSE  /* from and to years are same, not handled at this time, not expecting to run report from year 2000 to year 2000  */
+
+     end if;
+
+     lt_union = select objnr, lednr, wrttp, trgkz, gjahr, acpos, vorga, versn, abkat, geber, twaer, perbl, beltp,
+                       wlp00, cast( 0 as decimal( 15,2 ) ) as amtcm, cast( 0 as decimal( 15,2 ) ) as amtytd, cast( 0 as decimal( 15,2 ) ) as amtitd
+                  from :lt_yr0000
+                 union all
+                select objnr, lednr, wrttp, trgkz, gjahr, acpos, vorga, versn, abkat, geber, twaer, perbl, beltp,
+                       wlp00, amtcm, amtytd, amtitd
+                  from :lt_frdata
+                 union all
+                select objnr, lednr, wrttp, trgkz, gjahr, acpos, vorga, versn, abkat, geber, twaer, perbl, beltp,
+                       wlp00, amtcm, amtytd, amtitd
+                  from :lt_middata
+                 union all
+                select objnr, lednr, wrttp, trgkz, gjahr, acpos, vorga, versn, abkat, geber, twaer, perbl, beltp,
+                       wlp00, amtcm, amtytd, amtitd
+                  from :lt_todata;
+
+      lt_all = select objnr, lednr, wrttp, trgkz, gjahr, acpos, vorga, versn, abkat, geber, twaer, perbl, beltp,
+                      wlp00, amtcm, amtytd, amtitd,
+                cast( 0 as decimal( 15,2 ) ) as  rev, cast( 0 as decimal( 15,2 ) ) as yrev, cast( 0 as decimal( 15,2 ) ) as irev,
+                cast( 0 as decimal( 15,2 ) ) as  unb, cast( 0 as decimal( 15,2 ) ) as yunb, cast( 0 as decimal( 15,2 ) ) as iunb,
+                cast( 0 as decimal( 15,2 ) ) as  rsu, cast( 0 as decimal( 15,2 ) ) as yrsu, cast( 0 as decimal( 15,2 ) ) as irsu,
+                cast( 0 as decimal( 15,2 ) ) as  cos, cast( 0 as decimal( 15,2 ) ) as ycos, cast( 0 as decimal( 15,2 ) ) as icos,
+                cast( 0 as decimal( 15,2 ) ) as  prf, cast( 0 as decimal( 15,2 ) ) as yprf, cast( 0 as decimal( 15,2 ) ) as iprf,  /* profit, was mtd/ytd/itd */
+                cast( 0 as decimal( 15,2 ) ) as  wip, cast( 0 as decimal( 15,2 ) ) as ywip, cast( 0 as decimal( 15,2 ) ) as iwip,
+                cast( 0 as decimal( 15,2 ) ) as  res, cast( 0 as decimal( 15,2 ) ) as yres, cast( 0 as decimal( 15,2 ) ) as ires,
+                cast( 0 as decimal( 15,2 ) ) as  ril, cast( 0 as decimal( 15,2 ) ) as yril, cast( 0 as decimal( 15,2 ) ) as iril,
+
+                cast( 0 as decimal( 15,2 ) ) as  acc, cast( 0 as decimal( 15,2 ) ) as yacc, cast( 0 as decimal( 15,2 ) ) as iacc,
+                cast( 0 as decimal( 15,2 ) ) as  acr, cast( 0 as decimal( 15,2 ) ) as yacr, cast( 0 as decimal( 15,2 ) ) as iacr,
+                cast( 0 as decimal( 15,2 ) ) as  apf, cast( 0 as decimal( 15,2 ) ) as yapf, cast( 0 as decimal( 15,2 ) ) as iapf,
+* the next 5 fields are inception-to-date, no current month, no year-to-date
+                cast( 0 as decimal( 15,2 ) ) as iplr, cast( 0 as decimal( 15,2 ) ) as iplc, cast( 0 as decimal( 15,2 ) ) as iplp,
+                cast( 0 as decimal( 15,2 ) ) as iprm, cast( 0 as decimal( 15,2 ) ) as iros,
+                'USD'   as pwpos
+                from :lt_union ;
+
+       FOR lv_inx in 1..record_count( :lt_all )  DO
+
+         lc_version = '000';
+
+         if ( :lt_all.versn[ lv_inx ] = :lc_version and :lt_all.wrttp[ lv_inx ] = :lc_32 and :lt_all.abkat[ lv_inx ] = lc_75) then
+           lt_all.rev[ lv_inx]   = :lt_all.amtcm[  lv_inx] ;
+           lt_all.yrev[ lv_inx ] = :lt_all.amtytd[ lv_inx] ;
+           lt_all.irev[ lv_inx ] = :lt_all.amtitd[ lv_inx ] ;
+         end if;
+         if ( :lt_all.versn[ lv_inx ] = :lc_version and :lt_all.wrttp[ lv_inx ] = :lc_32 and :lt_all.abkat[ lv_inx ] = lc_68) then
+           lt_all.unb[ lv_inx ]  =  :lt_all.amtcm[ lv_inx ] ;
+           lt_all.yunb[ lv_inx ] =  :lt_all.amtytd[ lv_inx ] ;
+           lt_all.iunb[ lv_inx ] =  :lt_all.amtitd[ lv_inx ] ;
+         end if;
+         if ( :lt_all.versn[ lv_inx ] = :lc_version and :lt_all.wrttp[ lv_inx ] = :lc_32 and :lt_all.abkat[ lv_inx ] = lc_69) then
+           lt_all.rsu[ lv_inx ]  =  :lt_all.amtcm[ lv_inx ] ;
+           lt_all.yrsu[ lv_inx ] =  :lt_all.amtytd[ lv_inx ] ;
+           lt_all.irsu[ lv_inx ] =  :lt_all.amtitd[ lv_inx ] ;
+         end if;
+         if ( :lt_all.versn[ lv_inx ] = :lc_version and :lt_all.wrttp[ lv_inx ] = :lc_32 and ( :lt_all.abkat[ lv_inx ] = lc_63 or :lt_all.abkat[ lv_inx ] = lc_64 or :lt_all.abkat[ lv_inx ] = lc_65 ) ) then
+           lt_all.cos[ lv_inx ]  =  :lt_all.amtcm[ lv_inx ] ;
+           lt_all.ycos[ lv_inx ] =  :lt_all.amtytd[ lv_inx ] ;
+           lt_all.icos[ lv_inx ] =  :lt_all.amtitd[ lv_inx ] ;
+         end if;
+         if ( :lt_all.versn[ lv_inx ] = :lc_version and :lt_all.wrttp[ lv_inx ] = :lc_32 and :lt_all.abkat[ lv_inx ] = lc_70) then
+           lt_all.prf[ lv_inx ]  =  :lt_all.amtcm[ lv_inx ] ;
+           lt_all.yprf[ lv_inx ] =  :lt_all.amtytd[ lv_inx ] ;
+           lt_all.iprf[ lv_inx ] =  :lt_all.amtitd[ lv_inx ] ;
+         end if;
+         if ( :lt_all.versn[ lv_inx ] = :lc_version and :lt_all.wrttp[ lv_inx ] = :lc_32 and :lt_all.abkat[ lv_inx ] = lc_51) then
+           lt_all.wip[ lv_inx ]  =  :lt_all.amtcm[ lv_inx ] ;
+           lt_all.ywip[ lv_inx ] =  :lt_all.amtytd[ lv_inx ] ;
+           lt_all.iwip[ lv_inx ] =  :lt_all.amtitd[ lv_inx ] ;
+         end if;
+         if ( :lt_all.versn[ lv_inx ] = :lc_version and :lt_all.wrttp[ lv_inx ] = :lc_32 and :lt_all.abkat[ lv_inx ] = lc_54) then
+           lt_all.res[ lv_inx ]  =  :lt_all.amtcm[ lv_inx ] ;
+           lt_all.yres[ lv_inx ] =  :lt_all.amtytd[ lv_inx ] ;
+           lt_all.ires[ lv_inx ] =  :lt_all.amtitd[ lv_inx ] ;
+         end if;
+         if ( :lt_all.versn[ lv_inx ] = :lc_version and :lt_all.wrttp[ lv_inx ] = :lc_32 and ( :lt_all.abkat[ lv_inx ] = lc_c1 or :lt_all.abkat[ lv_inx ] = lc_c2 or :lt_all.abkat[ lv_inx ] = lc_c3  ) ) then
+           lt_all.ril[ lv_inx ]  =  :lt_all.amtcm[ lv_inx ] ;
+           lt_all.yril[ lv_inx ] =  :lt_all.amtytd[ lv_inx ] ;
+           lt_all.iril[ lv_inx ] =  :lt_all.amtitd[ lv_inx ] ;
+         end if;
+
+         if ( :lt_all.gjahr[ lv_inx ] = '0000' and :lt_all.versn[ lv_inx ] = 'LMP' and :lt_all.wrttp[ lv_inx ] = :lc_01 and :lt_all.vorga[ lv_inx ] = 'KSTR' ) then
+           lt_all.iplr[ lv_inx ] =  :lt_all.wlp00[ lv_inx ];
+         end if;
+         if ( :lt_all.gjahr[ lv_inx ] = '0000' and :lt_all.versn[ lv_inx ] = 'LMP' and :lt_all.wrttp[ lv_inx ] = :lc_01 and :lt_all.vorga[ lv_inx ] = 'KSTP' ) then
+           lt_all.iplc[ lv_inx ] =  :lt_all.wlp00[ lv_inx ] ;
+         end if;
+
+         lt_all.iplp[ lv_inx ] = :lt_all.iplr[ lv_inx ] + :lt_all.iplc[ lv_inx ];
+
+* iprm and iros Percentage calculation will be after sum/aggregation by objnr
+
+         lt_all.cos[ lv_inx ]  = :lt_all.cos[ lv_inx ]  + :lt_all.ril[ lv_inx ];
+         lt_all.ycos[ lv_inx ] = :lt_all.ycos[ lv_inx ] + :lt_all.yril[ lv_inx ];
+         lt_all.icos[ lv_inx ] = :lt_all.icos[ lv_inx ] + :lt_all.iril[ lv_inx ];
+
+* 25-Sep-2025 Rao A
+*         lt_all.prf[ lv_inx ]  = :lt_all.prf[ lv_inx ]  + :lt_all.ril[ lv_inx ];
+*         lt_all.yprf[ lv_inx ] = :lt_all.yprf[ lv_inx ] + :lt_all.yril[ lv_inx ];
+*         lt_all.iprf[ lv_inx ] = :lt_all.iprf[ lv_inx ] + :lt_all.iril[ lv_inx ];
+
+         lt_all.prf[ lv_inx ]  = :lt_all.rev[ lv_inx ] * -1 - :lt_all.cos[ lv_inx ];
+         lt_all.yprf[ lv_inx ] = :lt_all.yrev[ lv_inx ] * -1 - :lt_all.ycos[ lv_inx ];
+         lt_all.iprf[ lv_inx ] = :lt_all.irev[ lv_inx ] * -1 - :lt_all.icos[ lv_inx ];
+
+         lt_all.unb[ lv_inx ]  = :lt_all.unb[ lv_inx ] * -1;
+         lt_all.rsu[ lv_inx ]  = :lt_all.rsu[ lv_inx ] * -1;
+         lt_all.wip[ lv_inx ]  = :lt_all.wip[ lv_inx ] * -1;
+         lt_all.res[ lv_inx ]  = :lt_all.res[ lv_inx ] * -1;
+         lt_all.ril[ lv_inx ]  = :lt_all.ril[ lv_inx ] * -1;
+
+         lt_all.yunb[ lv_inx ] = :lt_all.yunb[ lv_inx ] * -1;
+         lt_all.yrsu[ lv_inx ] = :lt_all.yrsu[ lv_inx ] * -1;
+         lt_all.ywip[ lv_inx ] = :lt_all.ywip[ lv_inx ] * -1;
+         lt_all.yres[ lv_inx ] = :lt_all.yres[ lv_inx ] * -1;
+         lt_all.yril[ lv_inx ] = :lt_all.yril[ lv_inx ] * -1;
+
+         lt_all.iunb[ lv_inx ] = :lt_all.iunb[ lv_inx ] * -1;
+         lt_all.irsu[ lv_inx ] = :lt_all.irsu[ lv_inx ] * -1;
+         lt_all.iwip[ lv_inx ] = :lt_all.iwip[ lv_inx ] * -1;
+         lt_all.ires[ lv_inx ] = :lt_all.ires[ lv_inx ] * -1;
+         lt_all.iril[ lv_inx ] = :lt_all.iril[ lv_inx ] * -1;
+
+*        Actual Profit (Revenue + COS)
+         lt_all.apf[ lv_inx ]   = :lt_all.rev[ lv_inx ]  + :lt_all.cos[ lv_inx ] ;
+         lt_all.yapf[ lv_inx ]  = :lt_all.yrev[ lv_inx ] + :lt_all.ycos[ lv_inx ] ;
+         lt_all.iapf[ lv_inx ]  = :lt_all.irev[ lv_inx ] + :lt_all.icos[ lv_inx ] ;
+
+        IF :p_currtype = 'X' then      /* cost Object Currency */
+          lt_all.pwpos[ lv_inx ] = '?' ;
+        ELSE                      /* controlling area currency */
+          lt_all.pwpos[ lv_inx ] = 'USD' ;
+        END IF ;
+      end for ;
+
+*     lt_distinct = select distinct objnr from :lt_all ;    /* prsp inner join rpsco */
+     lt_dist_prps_objnr = select distinct objnr from :lt_proj ;   /* prps only, so acdoca can be picked up even if no rpsco */
+
+* from current level of each WBS in RPSCO, get all child nodes
+     lt_next = select distinct a.pspnr as posnr, '99999999' as down, a.pspnr as head, a.psphi
+                 from prps a
+            inner join :lt_dist_prps_objnr as b on a.objnr = b.objnr
+                   and a.mandt = :lv_client              ;
+
+     lt_l2anddown = select posnr as posnr, head from :lt_next;
+
+* Go down 3 levels
+     lv_loop = 3;
+     while lv_loop > 0 do
+       lt_next = select h.posnr, h.down, head, p.psphi
+                   from prhi as h
+             inner join :lt_next as p
+                     on p.posnr = h.up
+                  where h.mandt = :lv_client and h.psphi = p.psphi;
+
+       lt_l2anddown = select * from :lt_l2anddown
+                       union all
+                      select posnr as posnr, head from :lt_next;
+
+       lv_loop = :lv_loop - 1;
+     end while;
+
+     lt_objnr = select posnr, head, p1.posid as down_posid, p1.objnr as down_objnr, p2.objnr as l2objnr, p2.abgsl as abgsl
+                  from :lt_l2anddown as a
+            inner join prps as p1
+                    on a.posnr = p1.pspnr
+                   and p1.mandt = :lv_client
+            inner join prps as p2
+                    on a.head = p2.pspnr
+                   and p2.mandt = :lv_client ;
+
+*     lt_distinct = select distinct l2objnr as objnr from :lt_objnr ;    /* testing */
+
+     lt_adv      = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-ADV'  , 'Z-PRIOR-NET-ADV-LIQ' ) ;
+     lt_prog     = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-PROG' , 'Z-PRIOR-NET-PROG-LIQ' ) ;
+     lt_pbp      = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-PBP'  , 'Z-PRIOR-NET-PBP-LIQ' ) ;
+
+* AR Split at L3
+     lt_ar   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-AR' ) ;
+
+* OTA Cost Share Receivable / Payable
+     lt_ota   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-OTA' ) ;
+
+* Top Level (TL) manual postings (adjustments) at the end of every month
+     lt_rev_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-REV' ) ;
+     lt_cos_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-COS' ) ;
+     lt_unb_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-UNB' ) ;
+     lt_sur_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-SUR' ) ;
+     lt_wip_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-WIP' ) ;
+     lt_unr_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-UNR' ) ;
+     lt_los_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-LOS' ) ;
+     lt_adv_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-ADV' ) ;
+     lt_prg_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-PRG' ) ;
+     lt_prf_tl   = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-PRF' ) ;
+     lt_ar_tl    = select distinct valfrom, valto from setleaf where mandt = :lv_client and setclass = '0000'
+                                                                 and setname in ( 'Z-PRIOR-NET-TL-AR' ) ;
+     lt_racct = select valfrom from :lt_ar
+                 union
+                select valfrom from :lt_ota
+                 union
+                select valfrom from :lt_adv
+                 union
+                select valfrom from :lt_prog
+                 union
+                select valfrom from :lt_pbp
+                 union
+                select valfrom from :lt_rev_tl
+                 union
+                select valfrom from :lt_cos_tl
+                 union
+                select valfrom from :lt_unb_tl
+                 union
+                select valfrom from :lt_sur_tl
+                 union
+                select valfrom from :lt_wip_tl
+                 union
+                select valfrom from :lt_unr_tl
+                 union
+                select valfrom from :lt_los_tl
+                 union
+                select valfrom from :lt_adv_tl
+                 union
+                select valfrom from :lt_prg_tl
+                 union
+                select valfrom from :lt_prf_tl
+                 union
+                select valfrom from :lt_ar_tl
+                  ;
+
+     lt_acdoca =  SELECT
+                         rclnt,
+                         rldnr,
+                         rbukrs,
+                         gjahr,
+                         belnr,
+                         docln,
+                         racct,                  /* account # revenue = 40000000-49999999, cost = 50000000-59999999 */
+                         cast( case when ( :p_currtype = '')  then hsl   else ksl   end as decimal( 15, 2) ) as useamt,
+                         case when ( :p_currtype = '')  then rhcur else rkcur end as pwpos,
+                         poper,                  /* posting period */
+                         b.l2objnr as objnr,     /* object number of Level 2 node */
+                         ps_posid,
+                         fiscyearper,             /* fiscal period/year ex: 202506*/
+                         cast( 0 as decimal( 15,2 ) ) as  rev,  cast( 0 as decimal( 15,2 ) ) as yrev,   cast( 0 as decimal( 15,2 ) ) as irev,
+                         cast( 0 as decimal( 15,2 ) ) as  unb,  cast( 0 as decimal( 15,2 ) ) as yunb,   cast( 0 as decimal( 15,2 ) ) as iunb,
+                         cast( 0 as decimal( 15,2 ) ) as  rsu,  cast( 0 as decimal( 15,2 ) ) as yrsu,   cast( 0 as decimal( 15,2 ) ) as irsu,
+                         cast( 0 as decimal( 15,2 ) ) as  cos,  cast( 0 as decimal( 15,2 ) ) as ycos,   cast( 0 as decimal( 15,2 ) ) as icos,
+                         cast( 0 as decimal( 15,2 ) ) as  prf,  cast( 0 as decimal( 15,2 ) ) as yprf,   cast( 0 as decimal( 15,2 ) ) as iprf,  /* profit, was mtd, ytd, itd in legacy code */
+                         cast( 0 as decimal( 15,2 ) ) as  wip,  cast( 0 as decimal( 15,2 ) ) as ywip,   cast( 0 as decimal( 15,2 ) ) as iwip,
+                         cast( 0 as decimal( 15,2 ) ) as  res,  cast( 0 as decimal( 15,2 ) ) as yres,   cast( 0 as decimal( 15,2 ) ) as ires,
+                         cast( 0 as decimal( 15,2 ) ) as  ril,  cast( 0 as decimal( 15,2 ) ) as yril,   cast( 0 as decimal( 15,2 ) ) as iril,
+                         cast( 0 as decimal( 15,2 ) ) as iplr,  cast( 0 as decimal( 15,2 ) ) as iplc,   cast( 0 as decimal( 15,2 ) ) as iplp,   /* No Current month, no year to date, only inception-to-date */
+                         cast( 0 as decimal( 15,2 ) ) as iprm,  cast( 0 as decimal( 15,2 ) ) as iros,
+                         cast( 0 as decimal( 15,2 ) ) as  apf,  cast( 0 as decimal( 15,2 ) ) as yapf,   cast( 0 as decimal( 15,2 ) ) as iapf
+                    FROM acdoca as a
+              inner join :lt_objnr as b
+* For customer financing fields, match on POSID instead of OBJNR
+*                      on a.objnr  = b.down_objnr
+                      on a.ps_posid = b.down_posid
+                   WHERE rclnt    = :lv_client
+                     and rldnr    = :p_lednr
+                     and b.abgsl  <> ''                        /* Results Analysis ( ra ) key */
+                     AND fiscyearper >= :p_fryyyymmm
+                     and fiscyearper <= :p_toyyyymmm
+                     and poper > '000'                        /* 28-Jul-20205 Skip balance carry forward records*/
+                     and ( a.objnr = b.down_objnr or a.racct in ( select valfrom from :lt_racct ) );
+
+      lt_acdoca =  apply_filter( :lt_acdoca, :p_where_acdoca );
+
+*      lt_distinct = select distinct objnr from :lt_acdoca ;    /* testing */
+
+      lt_acdoca1 = select *,
+                          cast ( case when ( gjahr = :p_toyyyy and poper = :p_tommm ) then useamt  else 0   end as decimal( 15,2 ) ) as amt_cm,
+                          cast ( case when ( gjahr = :p_toyyyy )                      then useamt  else 0   end as decimal( 15,2 ) ) as amt_ytd,
+                          useamt                                                                                                     as amt_itd
+                     from :lt_acdoca ;
+
+*      lt_acdoca2 = select *,
+*                          cast( case when ( racct >= '0040000000' and racct < '0050000000' ) then amt_cm   else 0   end as decimal( 15, 2 ) ) as  acr,
+*                          cast( case when ( racct >= '0040000000' and racct < '0050000000' ) then amt_ytd  else 0   end as decimal( 15, 2 ) ) as yacr,
+*                          cast( case when ( racct >= '0040000000' and racct < '0050000000' ) then amt_itd  else 0   end as decimal( 15, 2 ) ) as iacr,
+*                          cast( case when ( racct >= '0050000000' and racct < '0060000000' ) then amt_cm   else 0   end as decimal( 15, 2 ) ) as  acc,
+*                          cast( case when ( racct >= '0050000000' and racct < '0060000000' ) then amt_ytd  else 0   end as decimal( 15, 2 ) ) as yacc,
+*                          cast( case when ( racct >= '0050000000' and racct < '0060000000' ) then amt_itd  else 0   end as decimal( 15, 2 ) ) as iacc
+*                     from :lt_acdoca1 ;
+
+      lt_act_revenue_temp = apply_filter( :lt_acdoca1, :p_where_revenue ) ;
+      lt_act_revenue = select objnr,
+                          sum( amt_cm )  as  acr,
+                          sum( amt_ytd ) as yacr,
+                          sum( amt_itd ) as iacr
+                     from :lt_act_revenue_temp
+                    group by objnr;
+
+      lt_act_cost_temp = APPLY_FILTER( :lt_acdoca1, :p_where_cost) ;
+      lt_act_cost = select objnr,
+                          sum( amt_cm )  as  acc,
+                          sum( amt_ytd ) as yacc,
+                          sum( amt_itd ) as iacc
+                     from :lt_act_cost_temp
+                    group by objnr;
+
+      lt_ar_aggr = select objnr,
+                          sum( amt_cm )  as  ar,
+                          sum( amt_ytd ) as yar,
+                          sum( amt_itd ) as iar
+                     from :lt_acdoca1
+                    where racct in ( select valfrom from :lt_ar )
+                    group by objnr;
+
+      lt_ota_aggr = select objnr,
+                           sum( amt_cm )  as  ota,
+                           sum( amt_ytd ) as yota,
+                           sum( amt_itd ) as iota
+                     from :lt_acdoca1
+                    where racct in ( select valfrom from :lt_ota )
+                    group by objnr;
+
+      lt_adv_aggr = select objnr,
+                           sum( amt_cm )  as  aca,
+                           sum( amt_ytd ) as yaca,
+                           sum( amt_itd ) as iaca
+                     from :lt_acdoca1
+                    where racct in ( select valfrom from :lt_adv )
+                    group by objnr;
+
+      lt_prog_aggr = select objnr,
+                            sum( amt_cm )  as  acg,
+                            sum( amt_ytd ) as yacg,
+                            sum( amt_itd ) as iacg
+                       from :lt_acdoca1
+                      where racct in ( select valfrom from :lt_prog )
+                      group by objnr;
+
+      lt_pbp_aggr = select objnr,
+                           sum( amt_cm )  as  acp,
+                           sum( amt_ytd ) as yacp,
+                           sum( amt_itd ) as iacp
+                      from :lt_acdoca1
+                     where racct in ( select valfrom from :lt_pbp )
+                      group by objnr;
+
+      lt_rev_tl_aggr = select objnr,
+                             sum( amt_cm ) as   rev_tl,
+                             sum( amt_ytd ) as yrev_tl,
+                             sum( amt_itd ) as irev_tl
+                        from :lt_acdoca1
+                       where racct in ( select valfrom from :lt_rev_tl )
+                       group by objnr;
+
+      lt_cos_tl_aggr = select objnr,
+                              sum( amt_cm ) as   cos_tl,
+                              sum( amt_ytd ) as ycos_tl,
+                              sum( amt_itd ) as icos_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_cos_tl )
+                        group by objnr;
+
+      lt_unb_tl_aggr = select objnr,
+                              sum( amt_cm ) as   unb_tl,
+                              sum( amt_ytd ) as yunb_tl,
+                              sum( amt_itd ) as iunb_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_unb_tl )
+                        group by objnr;
+
+      lt_sur_tl_aggr = select objnr,
+                              sum( amt_cm ) as   sur_tl,
+                              sum( amt_ytd ) as ysur_tl,
+                              sum( amt_itd ) as isur_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_sur_tl )
+                        group by objnr;
+
+      lt_wip_tl_aggr = select objnr,
+                              sum( amt_cm ) as   wip_tl,
+                              sum( amt_ytd ) as ywip_tl,
+                              sum( amt_itd ) as iwip_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_wip_tl )
+                        group by objnr;
+
+      lt_unr_tl_aggr = select objnr,
+                              sum( amt_cm ) as   unr_tl,
+                              sum( amt_ytd ) as yunr_tl,
+                              sum( amt_itd ) as iunr_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_unr_tl )
+                        group by objnr;
+
+      lt_los_tl_aggr = select objnr,
+                              sum( amt_cm )  as  los_tl,
+                              sum( amt_ytd ) as ylos_tl,
+                              sum( amt_itd ) as ilos_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_los_tl )
+                        group by objnr;
+
+      lt_adv_tl_aggr = select objnr,
+                              sum( amt_cm )  as  adv_tl,
+                              sum( amt_ytd ) as yadv_tl,
+                              sum( amt_itd ) as iadv_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_adv_tl )
+                        group by objnr;
+
+      lt_prg_tl_aggr = select objnr,
+                              sum( amt_cm )  as  prg_tl,
+                              sum( amt_ytd ) as yprg_tl,
+                              sum( amt_itd ) as iprg_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_prg_tl )
+                        group by objnr;
+
+      lt_prf_tl_aggr = select objnr,
+                              sum( amt_cm )  as  prf_tl,
+                              sum( amt_ytd ) as yprf_tl,
+                              sum( amt_itd ) as iprf_tl
+                         from :lt_acdoca1
+                        where racct in ( select valfrom from :lt_prf_tl )
+                        group by objnr;
+
+      lt_ar_tl_aggr = select objnr,
+                           sum( amt_cm )  as  ar_tl,
+                           sum( amt_ytd ) as yar_tl,
+                           sum( amt_itd ) as iar_tl
+                      from :lt_acdoca1
+                     where racct in ( select valfrom from :lt_ar_tl )
+                        group by objnr;
+
+      lt_aggr = select objnr ,
+                        rev,  yrev, irev,
+                        unb,  yunb, iunb,
+                        rsu,  yrsu, irsu,
+                        cos,  ycos, icos,
+                        prf,  yprf, iprf,
+                        wip,  ywip, iwip,
+                        res,  yres, ires,
+                        ril,  yril, iril,
+*                        acc,  yacc, iacc,
+*                        acr,  yacr, iacr,
+                        apf,  yapf, iapf,
+                        iplr, iplc, iplp
+                   from :lt_all
+              union all
+                 select objnr ,
+                        rev,  yrev, irev,
+                        unb,  yunb, iunb,
+                        rsu,  yrsu, irsu,
+                        cos,  ycos, icos,
+                        prf,  yprf, iprf,
+                        wip,  ywip, iwip,
+                        res,  yres, ires,
+                        ril,  yril, iril,
+*                        acc,  yacc, iacc,
+*                        acr,  yacr, iacr,
+                        apf,  yapf, iapf,
+                        iplr, iplc, iplp
+                  from :lt_acdoca1 ;
+
+   lt_aggr1 =     select objnr,
+                       sum( rev )   as  rev, sum( yrev )  as yrev, sum( irev )  as irev,
+                       sum( unb )   as  unb, sum( yunb )  as yunb, sum( iunb )  as iunb,
+                       sum( rsu )   as  rsu, sum( yrsu )  as yrsu, sum( irsu )  as irsu,
+                       sum( cos )   as  cos, sum( ycos )  as ycos, sum( icos )  as icos,
+                       sum( prf )   as  prf, sum( yprf )  as yprf, sum( iprf )  as iprf,
+                       sum( wip )   as  wip, sum( ywip )  as ywip, sum( iwip )  as iwip,
+                       sum( res )   as  res, sum( yres )  as yres, sum( ires )  as ires,
+                       sum( ril )   as  ril, sum( yril )  as yril, sum( iril )  as iril,
+*                       sum( acc )   as  acc, sum( yacc )  as yacc, sum( iacc )  as iacc,
+*                       sum( acr )   as  acr, sum( yacr )  as yacr, sum( iacr )  as iacr,
+                       sum( apf )   as  apf, sum( yapf )  as yapf, sum( iapf )  as iapf,
+                       sum( iplr )  as iplr, sum( iplc )  as iplc, sum( iplp )  as iplp
+                  from :lt_aggr
+                 group by objnr ;
+
+* calculate percentages based on the sums per objnr
+       lt_aggr2 = select *,
+                         ndiv0( iplp, iplr ) *  100 as iros,
+                         ndiv0( iplp, iplc ) * -100 as iprm,
+                         ndiv0(  apf,  cos ) * -100 as  app,
+                         ndiv0( yapf, ycos ) * -100 as yapp,
+                         ndiv0( iapf, icos ) * -100 as iapp,
+                         ndiv0(  apf,  rev ) *  100 as  arp,
+                         ndiv0( yapf, yrev ) *  100 as yarp,
+                         ndiv0( iapf, irev ) *  100 as iarp
+                   from :lt_aggr1;
+
+      lt_aggr3 = select a.objnr,
+                        rev, yrev, irev,
+                        unb,  yunb, iunb,
+                        rsu,  yrsu, irsu,
+                        cos,  ycos, icos,
+                        prf,  yprf, iprf,
+                        wip,  ywip, iwip,
+                        res,  yres, ires,
+                        ril,  yril, iril,
+                        coalesce(a1.acc, 0)    as  acc,
+                        coalesce(a1.yacc, 0)   as yacc,
+                        coalesce(a1.iacc, 0)   as iacc,
+                        coalesce(a2.acr, 0)    as  acr,
+                        coalesce(a2.yacr, 0)   as yacr,
+                        coalesce(a2.iacr, 0)   as iacr,
+                        coalesce(  b.aca, 0 )  as  aca,
+                        coalesce( b.yaca, 0 )  as yaca,
+                        coalesce( b.iaca, 0 )  as iaca,
+                        coalesce(  c.acg, 0 )  as  acg,
+                        coalesce( c.yacg, 0 )  as yacg,
+                        coalesce( c.iacg, 0 )  as iacg,
+                        coalesce(  d.acp, 0 )  as  acp,
+                        coalesce( d.yacp, 0 )  as yacp,
+                        coalesce( d.iacp, 0 )  as iacp,
+                        coalesce(  e.rev_tl, 0 )  as  rev_tl,
+                        coalesce( e.yrev_tl, 0 )  as yrev_tl,
+                        coalesce( e.irev_tl, 0 )  as irev_tl,
+                        coalesce(  f.cos_tl, 0 )  as  cos_tl,
+                        coalesce( f.ycos_tl, 0 )  as ycos_tl,
+                        coalesce( f.icos_tl, 0 )  as icos_tl,
+                        coalesce(  g.unb_tl, 0 )  as  unb_tl,
+                        coalesce( g.yunb_tl, 0 )  as yunb_tl,
+                        coalesce( g.iunb_tl, 0 )  as iunb_tl,
+                        coalesce(  h.sur_tl, 0 )  as  sur_tl,
+                        coalesce( h.ysur_tl, 0 )  as ysur_tl,
+                        coalesce( h.isur_tl, 0 )  as isur_tl,
+                        coalesce(  i.wip_tl, 0 )  as  wip_tl,
+                        coalesce( i.ywip_tl, 0 )  as ywip_tl,
+                        coalesce( i.iwip_tl, 0 )  as iwip_tl,
+                        coalesce(  j.unr_tl, 0 )  as  unr_tl,
+                        coalesce( j.yunr_tl, 0 )  as yunr_tl,
+                        coalesce( j.iunr_tl, 0 )  as iunr_tl,
+                        coalesce(  k.los_tl, 0 )  as  los_tl,
+                        coalesce( k.ylos_tl, 0 )  as ylos_tl,
+                        coalesce( k.ilos_tl, 0 )  as ilos_tl,
+                        coalesce(  l.adv_tl, 0 )  as  adv_tl,
+                        coalesce( l.yadv_tl, 0 )  as yadv_tl,
+                        coalesce( l.iadv_tl, 0 )  as iadv_tl,
+                        coalesce(  m.prg_tl, 0 )  as  prg_tl,
+                        coalesce( m.yprg_tl, 0 )  as yprg_tl,
+                        coalesce( m.iprg_tl, 0 )  as iprg_tl,
+                        coalesce(  n.prf_tl, 0 )  as  prf_tl,
+                        coalesce( n.yprf_tl, 0 )  as yprf_tl,
+                        coalesce( n.iprf_tl, 0 )  as iprf_tl,
+                        coalesce(  o.ar_tl, 0 )   as  ar_tl,
+                        coalesce( o.yar_tl, 0 )   as yar_tl,
+                        coalesce( o.iar_tl, 0 )   as iar_tl,
+                        coalesce(    q.ota, 0 )   as   ota,
+                        coalesce(  q.yota, 0 )    as  yota,
+                        coalesce(  q.iota, 0 )    as  iota,
+                        coalesce(    r.ar, 0 )    as    ar,
+                        coalesce(  r.yar, 0 )     as   yar,
+                        coalesce(  r.iar, 0 )     as   iar,
+                        apf,  yapf, iapf,
+                        iplr, iplc, iplp,
+                        iros, iprm,
+                        app, yapp, iapp,
+                        arp,
+                        yarp,
+                        iarp
+                   from :lt_aggr2 as a
+        left outer join :lt_act_cost as a1
+                     on a.objnr = a1.objnr
+        left outer join :lt_act_revenue as a2
+                     on a.objnr = a2.objnr
+        left outer join :lt_adv_aggr as b
+                     on a.objnr = b.objnr
+        left outer join :lt_prog_aggr as c
+                     on a.objnr = c.objnr
+        left outer join :lt_pbp_aggr as d
+                     on a.objnr = d.objnr
+        left outer join :lt_rev_tl_aggr as e
+                     on a.objnr = e.objnr
+        left outer join :lt_cos_tl_aggr as f
+                     on a.objnr = f.objnr
+        left outer join :lt_unb_tl_aggr as g
+                     on a.objnr = g.objnr
+        left outer join :lt_sur_tl_aggr as h
+                     on a.objnr = h.objnr
+        left outer join :lt_wip_tl_aggr as i
+                     on a.objnr = i.objnr
+        left outer join :lt_unr_tl_aggr as j
+                     on a.objnr = j.objnr
+        left outer join :lt_los_tl_aggr as k
+                     on a.objnr = k.objnr
+        left outer join :lt_adv_tl_aggr as l
+                     on a.objnr = l.objnr
+        left outer join :lt_prg_tl_aggr as m
+                     on a.objnr = m.objnr
+        left outer join :lt_prf_tl_aggr as n
+                     on a.objnr = n.objnr
+        left outer join :lt_ar_tl_aggr as o
+                     on a.objnr = o.objnr
+        left outer join :lt_ota_aggr as q
+                     on a.objnr = q.objnr
+        left outer join :lt_ar_aggr as r
+                     on a.objnr = r.objnr ;
+
+* 4-Sep-2025 Rao A  Defect 8000039162
+* There may be multiple rows in POB Table (zz1_3f59cc98d08a), so sum the values
+* Change the formula for orders and backlog
+
+* 30-Jan-2026 Rao A Defect 8000099002
+* Instead of single value, should be current month, yeaar-to-date and inception to date
+      lv_tomm = substr( :p_tommm, 2, 2 );   /* 3 char period to 2 char period  */
+      lt_pob_tmp = select a.objnr,
+                       coalesce(c.gjahr,'0000') as gjahr,
+                       coalesce(c.period,'00') as period,
+*                      sum cast( coalesce(orders_v,0) + coalesce(current_orders_v,0) + coalesce(manual_order_adj_v,0) as dec( 15,2 ) ) ) as orders_tot,
+                       cast( coalesce(trans_amt_v,0) + coalesce(manual_order_adj_v,0) + coalesce(orders_v,0) + coalesce(csr_planned_rev_v,0) as dec( 15,2 ) )  as orders_amt,
+*                      sum( cast( coalesce(manual_backlog_adj_v,0) + coalesce(current_backlog_v,0) as dec( 15,2 ) ) ) as backlog_tot
+                       cast( coalesce(manual_backlog_adj_v,0) + coalesce(backlogadj_fx_v,0) + coalesce(CSR_RESRVES_V,0) as dec( 15,2 ) )  as backlog_amt
+                 from :lt_aggr3 as a
+      left outer join prps as b
+                   on a.objnr = b.objnr
+                  and b.mandt = :lv_client
+      left outer join zz1_3f59cc98d08a  as c
+                   on b.usr01 = c.pob
+                  and c.client = :lv_client
+                  and ( c.gjahr < :p_toyyyy or ( c.gjahr = :p_toyyyy and c.period <= :lv_tomm ) )
+                  and c.gjahr > :p_fryyyy ;    /* Skip year = blank or 0000  */
+
+
+      lt_pob = select objnr,
+                      SUM( cast ( case when ( gjahr = :p_toyyyy and period = :lv_tomm) then orders_amt  else 0   end as decimal( 15,2 ) ) ) as orders,
+                      SUM( cast ( case when ( gjahr = :p_toyyyy and period = :lv_tomm) then backlog_amt else 0   end as decimal( 15,2 ) ) ) as backlog,
+                      SUM( cast ( case when ( gjahr = :p_toyyyy ) then orders_amt  else 0   end as decimal( 15,2 ) ) ) as yorders,
+                      SUM( cast ( case when ( gjahr = :p_toyyyy ) then backlog_amt else 0   end as decimal( 15,2 ) ) ) as ybacklog,
+                      sum( orders_amt )  as iorders,
+                      sum( backlog_amt ) as ibacklog
+                 from :lt_pob_tmp
+             group by objnr;
+
+      lt_dist_prps_pspnr = select distinct pspnr, objnr from :lt_proj;
+
+* Go from L2 to L3 to find contract numbers
+      lt_vbeln_l3 = select a.pspnr,
+                           a.objnr,
+                           case
+                             when d.vbtyp = 'C' then d.vgbel
+                             else d.vbeln
+                           end as vbeln
+                   from :lt_dist_prps_pspnr as a
+             inner join prhi as b                      /* to L3 level */
+                     on a.pspnr = b.up
+                    and b.mandt = :lv_client
+             inner join vmpa as c
+                     on b.posnr = c.ps_psp_pnr
+                    and c.mandt = :lv_client
+             inner join vbak as d
+                     on c.vbeln = d.vbeln
+                    and d.mandt = :lv_client ;
+
+      lt_contracts_l3 = select distinct a.pspnr,
+                            a.objnr,
+                            coalesce(cust_conno, '')  as cust_conno,
+                            coalesce(delv_ordno, '')  as delv_ordno,
+                            coalesce(prime_conno, '') as prime_conno
+                       from :lt_vbeln_l3 as a
+                 inner join ZC_FI_CTR_FLOWDOWN as b
+                         on a.vbeln = b.vbeln ;
+
+* filter the WBSes that did not have a contract number at L3 level
+      lt_for_l4 = select distinct pspnr, objnr from :lt_contracts_l3 where cust_conno = '';
+
+* for those, go down one more level to L4 and try to get contract numbers
+      lt_vbeln_l4 = select a.pspnr,
+                           a.objnr,
+                           case
+                             when d.vbtyp = 'C' then d.vgbel
+                             else d.vbeln
+                           end as vbeln
+                   from :lt_for_l4 as a
+             inner join prhi as b                 /* to L3 level */
+                     on a.pspnr = b.up
+                    and b.mandt = :lv_client
+             inner join prhi as b2                /* to L4 level */
+                     on b.posnr = b2.up
+                    and b2.mandt = :lv_client
+             inner join vmpa as c
+                     on b2.posnr = c.ps_psp_pnr
+                    and c.mandt = :lv_client
+             inner join vbak as d
+                     on c.vbeln = d.vbeln
+                    and d.mandt = :lv_client ;
+
+      lt_contracts_l4 = select distinct a.pspnr,
+                            a.objnr,
+                            coalesce(cust_conno, '')  as cust_conno,
+                            coalesce(delv_ordno, '')  as delv_ordno,
+                            coalesce(prime_conno, '') as prime_conno
+                       from :lt_vbeln_l4 as a
+                 inner join ZC_FI_CTR_FLOWDOWN as b
+                         on a.vbeln = b.vbeln ;
+
+      lt_c1 = select objnr, cust_conno
+                from :lt_contracts_l3
+               where cust_conno <> ''
+               union all
+              select objnr, cust_conno
+                from :lt_contracts_l4
+               where cust_conno <> '';
+
+      lt_c1 = select distinct objnr, cust_conno
+                from :lt_c1;
+
+      lt_cust_conno = select objnr, SUBSTRING(STRING_AGG(cust_conno, ', '),1,255)  AS cust_conno
+                        from :lt_c1
+                       group by objnr;
+
+      lt_c2 = select objnr, delv_ordno
+                FROM :lt_contracts_l3
+               where delv_ordno <> ''
+               union all
+              select objnr, delv_ordno
+                from :lt_contracts_l4
+               where delv_ordno <> '';
+
+      lt_c2 = select distinct objnr, delv_ordno
+                from :lt_c2;
+
+      lt_delv_ordno = select objnr, SUBSTRING(STRING_AGG(delv_ordno, ', '),1,255)  AS delv_ordno
+                        from :lt_c2
+                       group by objnr;
+
+      lt_c3 = select objnr, prime_conno
+                FROM :lt_contracts_l3
+               where prime_conno <> ''
+               union all
+              select objnr, prime_conno
+                from :lt_contracts_l4
+               where prime_conno <> '';
+
+      lt_c3 = select distinct objnr, prime_conno
+                from :lt_c3;
+
+      lt_prime_conno = select objnr,  SUBSTRING(STRING_AGG(prime_conno, ', '),1,255)  AS prime_conno
+                        from :lt_c3
+                       group by objnr;
+
+      return SELECT :lv_client  as client,
+                     proj_pspid as prj,
+                     posid      as wbs,
+                     post1      as wbspost1,
+                     proj_usr00 as usr00,
+                     coalesce( rev, 0 )  as  rev,  coalesce( yrev, 0 ) as yrev, coalesce( irev, 0 ) as irev,
+                     coalesce( unb, 0 )  as  unb,  coalesce( yunb, 0 ) as yunb, coalesce( iunb, 0 ) as iunb,
+                     coalesce( rsu, 0 )  as  rsu,  coalesce( yrsu, 0 ) as yrsu, coalesce( irsu, 0 ) as irsu,
+                     coalesce( cos, 0 )  as  cos,  coalesce( ycos, 0 ) as ycos, coalesce( icos, 0 ) as icos,
+                     coalesce( prf, 0 )  as  prf,  coalesce( yprf, 0 ) as yprf, coalesce( iprf, 0 ) as iprf,
+                     coalesce( wip, 0 )  as  wip,  coalesce( ywip, 0 ) as ywip, coalesce( iwip, 0 ) as iwip,
+                     coalesce( res, 0 )  as  res,  coalesce( yres, 0 ) as yres, coalesce( ires, 0 ) as ires,
+                     coalesce( ril, 0 )  as  ril,  coalesce( yril, 0 ) as yril, coalesce( iril, 0 ) as iril,
+                     coalesce( acc, 0 )  as  acc,  coalesce( yacc, 0 ) as yacc, coalesce( iacc, 0 ) as iacc,
+                     coalesce( acr, 0 )  as  acr,  coalesce( yacr, 0 ) as yacr, coalesce( iacr, 0 ) as iacr,
+                     coalesce( apf, 0 )  as  apf,  coalesce( yapf, 0 ) as yapf, coalesce( iapf, 0 ) as iapf,
+                     coalesce( app, 0 )  as  app,  coalesce( yapp, 0 ) as yapp, coalesce( iapp, 0 ) as iapp,
+                     coalesce( arp, 0 )  as  arp,  coalesce( yarp, 0 ) as yarp, coalesce( iarp, 0 ) as iarp,
+                     coalesce( aca, 0 )  as  aca,  coalesce( yaca, 0 ) as yaca, coalesce( iaca, 0 ) as iaca,
+                     coalesce( acg, 0 )  as  acg,  coalesce( yacg, 0 ) as yacg, coalesce( iacg, 0 ) as iacg,
+                     coalesce( acp, 0 )  as  acp,  coalesce( yacp, 0 ) as yacp, coalesce( iacp, 0 ) as iacp,
+
+                     coalesce( ar, 0 )   as  ar,  coalesce( yar, 0 ) as yar,  coalesce( iar, 0 ) as iar,
+                     coalesce(  cust_conno, '' ) as cust_conno,
+                     coalesce(  delv_ordno, '' ) as delv_ordno,
+                     coalesce(  prime_conno, '' ) as prime_conno,
+                     coalesce( ota, 0 )  as  ota,  coalesce( yota, 0 ) as yota, coalesce( iota, 0 ) as iota,
+                     coalesce( orders, 0 )  as orders,   coalesce( yorders, 0 ) as yorders, coalesce( iorders, 0 ) as iorders,
+                     coalesce( backlog, 0 ) as backlog,  coalesce( ybacklog,0 ) as ybacklog,coalesce( ibacklog, 0) as ibacklog,
+                     coalesce( rev_tl, 0 )  as  rev_tl,  coalesce( yrev_tl, 0 ) as yrev_tl, coalesce( irev_tl, 0 ) as irev_tl,
+                     coalesce( cos_tl, 0 )  as  cos_tl,  coalesce( ycos_tl, 0 ) as ycos_tl, coalesce( icos_tl, 0 ) as icos_tl,
+                     coalesce( unb_tl, 0 )  as  unb_tl,  coalesce( yunb_tl, 0 ) as yunb_tl, coalesce( iunb_tl, 0 ) as iunb_tl,
+                     coalesce( sur_tl, 0 )  as  sur_tl,  coalesce( ysur_tl, 0 ) as ysur_tl, coalesce( isur_tl, 0 ) as isur_tl,
+                     coalesce( wip_tl, 0 )  as  wip_tl,  coalesce( ywip_tl, 0 ) as ywip_tl, coalesce( iwip_tl, 0 ) as iwip_tl,
+                     coalesce( unr_tl, 0 )  as  unr_tl,  coalesce( yunr_tl, 0 ) as yunr_tl, coalesce( iunr_tl, 0 ) as iunr_tl,
+                     coalesce( los_tl, 0 )  as  los_tl,  coalesce( ylos_tl, 0 ) as ylos_tl, coalesce( ilos_tl, 0 ) as ilos_tl,
+                     coalesce( adv_tl, 0 )  as  adv_tl,  coalesce( yadv_tl, 0 ) as yadv_tl, coalesce( iadv_tl, 0 ) as iadv_tl,
+                     coalesce( prg_tl, 0 )  as  prg_tl,  coalesce( yprg_tl, 0 ) as yprg_tl, coalesce( iprg_tl, 0 ) as iprg_tl,
+                     coalesce( prf_tl, 0 )  as  prf_tl,  coalesce( yprf_tl, 0 ) as yprf_tl, coalesce( iprf_tl, 0 ) as iprf_tl,
+                     coalesce( ar_tl, 0 )   as  ar_tl,   coalesce( yar_tl, 0 )  as yar_tl,  coalesce( iar_tl, 0 )  as iar_tl,
+                     coalesce( iplr, 0 )    as  iplr,    coalesce( iplc, 0 )    as iplc,    coalesce( iplp, 0 ) as iplp,
+                     coalesce( iprm, 0 )    as  iprm,    coalesce( iros, 0 )    as iros,
+                     abgsl as ra,
+                     a.prart as typ,
+                     t.pratx as tdesc,
+                     a.prctr as prctr,
+                     pwpos as pwpos,
+                     pc.ktext as pdesc,
+                     '' as pgrp,
+                     '' as pgdesc,
+                     '' as ba,
+                     '' as badesc,
+                     '' as lob,
+                     '' as lobdesc,
+                     pbukr,
+                     pspnr,
+                     '' as buc,
+                     astna,
+                     astnr,
+                     verna,
+                     vernr,
+                     a.objnr as objnr,
+                     system_status,
+                     user_status,
+                     '' as revclass,
+                     proj_pspnr as objnr_parent,
+                     '' as flag
+                from :lt_proj as a
+     inner join :lt_aggr3 as b
+                  on a.objnr = b.objnr
+     left outer join :lt_projsyst1 as s
+                  on a.objnr = s.objnr
+     left outer join :lt_projuser1 as u
+                  on a.objnr = u.objnr
+     left outer join tcj1t as t
+                  on a.prart = t.prart and langu = :lv_spras and t.mandt = :lv_client
+     left outer join cepct as pc
+                  on a.prctr = pc.prctr and kokrs = 'LMCO' and datbi >= :lv_datum and pc.mandt = :lv_client
+     left outer join :lt_pob as pob
+                  on a.objnr = pob.objnr
+     left outer join :lt_cust_conno as c1
+                  on a.objnr = c1.objnr
+     left outer join :lt_delv_ordno as c2
+                  on a.objnr = c2.objnr
+     left outer join :lt_prime_conno as c3
+                  on a.objnr = c3.objnr
+            order by prj, wbs                  ;
+
+  ENDMETHOD.
+ENDCLASS.
