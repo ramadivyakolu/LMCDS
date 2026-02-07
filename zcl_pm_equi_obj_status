@@ -1,0 +1,110 @@
+CLASS zcl_pm_equi_obj_status DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
+
+  PUBLIC SECTION.
+    INTERFACES if_amdp_marker_hdb .
+    CLASS-METHODS get_status FOR TABLE FUNCTION  ztf_pm_equi_obj_status.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+ENDCLASS.
+
+
+
+CLASS zcl_pm_equi_obj_status IMPLEMENTATION.
+  METHOD get_status BY DATABASE FUNCTION FOR HDB LANGUAGE SQLSCRIPT OPTIONS READ-ONLY  USING jest
+                                                                                              jsto
+                                                                                              tj02
+                                                                                              tj02t
+                                                                                              tj04
+                                                                                              tj30
+                                                                                              tj30t.
+
+    lt_jest_system =
+            select jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   case
+                    when tj04.linep <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.linep end as position,
+                   case
+                    when tj04.statp <= '00' then '99'
+                    when tj04.linep is null then '99'
+                    else tj04.statp end as priority,
+                    txt04,
+                    txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr  = jest.objnr
+         left outer join tj04  on  tj04.obtyp  = jsto.obtyp and tj04.istat = jest.stat
+         inner join tj02  on tj02.istat  = jest.stat
+         inner join tj02t on tj02t.istat = jest.stat and tj02t.spras = session_context('LOCALE_SAP')
+     where jest.inact = ' '
+       and jest.stat between 'I0000' and 'I9999'
+       and tj02.nodis = ' '
+       and jsto.mandt = session_context('CLIENT');
+
+*   Get User Status
+     lt_jest_user =
+            SELECT jest.mandt  as client,
+                   jest.objnr  as object_number,
+                   tj30.stonr,
+                   case
+                    when tj30.linep <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.linep end as position,
+                   case
+                    when tj30.statp <= '00' then '99'
+                    when tj30.linep is null then '99'
+                    else tj30.statp end as priority,
+                   txt04,
+                   txt30
+     from jest
+         inner join jsto  on jsto.mandt = jest.mandt and jsto.objnr = jest.objnr
+         inner join tj30  on tj30.mandt = jest.mandt and
+                             tj30.stsma = jsto.stsma and
+                             tj30.estat = jest.stat
+         inner join tj30t on tj30t.mandt = tj30.mandt and
+                             tj30t.stsma = tj30.stsma and
+                             tj30t.estat = tj30.estat and
+                             tj30t.spras = session_context('LOCALE_SAP')
+     where jest.inact = ' '
+      and jest.stat between 'E0000' and 'E9999'
+      and jsto.mandt = session_context('CLIENT');
+
+
+*  Aggregate System Statuses (Will eventually need to handle scenario where we have two status that have the same posistion)
+    lt_agr_system =
+     SELECT  client,
+             object_number,
+             cast( STRING_AGG( CAST( txt04 || nchar(32) || nchar(32) || nchar(32) as char(4) ), nchar(32) ORDER BY position, priority, txt04 ) as char( 100 ) ) as status_system,
+             cast( string_agg( txt30, nchar(13) order by POSITION, priority, txt04 ) as char( 100 ) ) as status_system_long
+            from :lt_jest_system
+              GROUP BY client, object_number;
+
+*  Aggregate User Statuses
+    lt_agr_user =
+     SELECT  client,
+             object_number,
+             cast( string_agg( cast( txt04 || nchar(32) || nchar(32) || nchar(32) as char(4) ), nchar(32) order by stonr desc, POSITION, priority, txt04 ) as char( 100 ) ) as status_user,
+             cast( string_agg( txt30, nchar(13) order by stonr desc, POSITION, priority, txt04  ) as char( 100 ) ) as status_user_long
+            from :lt_jest_user
+              GROUP BY client, object_number;
+
+
+
+*   Return selection
+     RETURN select :lt_agr_system.client,
+                   :lt_agr_system.object_number,
+                   :lt_agr_system.status_system,
+                   :lt_agr_user.status_user,
+                   cast ( :lt_agr_system.status_system_long as nvarchar(100) ) as status_system_long,
+                   cast ( :lt_agr_user.status_user_long     as nvarchar(100) ) as status_user_long
+                   from :lt_agr_system
+                    left outer join :lt_agr_user on :lt_agr_system.client        = :lt_agr_user.client and
+                                                    :lt_agr_system.object_number = :lt_agr_user.object_number;
+
+
+  endmethod.
+
+ENDCLASS.
